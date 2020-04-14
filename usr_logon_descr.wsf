@@ -1,0 +1,76 @@
+<job id="logon_Descr">
+<script language="VBScript" src="../libs/lib_core.vbs" ></script>
+<script language="VBScript">
+'Скрипт регистрации пользователя на ПК
+'v0.3 - часть, отвечающая за инвентаризацию вынесена в отдельный скрипт, он вызывается в самом конце
+'v0.2 - переведено на WSH для подключения библиотек и ведения лога
+
+Dim adsinfo, ThisComp, oUser, oShell, strSessionName
+Set oShell = CreateObject("WScript.Shell")
+strSessionName = oShell.ExpandEnvironmentStrings( "%SESSIONNAME%" )
+if ( inStr(LCase(strSessionName),"rdp") <> 0 ) Then
+	'wscript.Echo "not in RDP"
+	wscript.quit
+End If
+
+
+const scrName="gp_logonDescr" : const scrVer="0.3"
+Dim LogFile : Set logFile = objFSO.OpenTextFile(WorkDir & scrName & ".log", 8, True)
+Msg "-" : Msg "Script started: "&scrName&" "&scrVer
+
+Set adsinfo = CreateObject("adsysteminfo")
+Set ThisComp = GetObject("LDAP://" & adsinfo.ComputerName)
+Set oUser = GetObject("LDAP://" & adsinfo.UserName)
+Set wshNetwork = CreateObject( "WScript.Network" )
+Set objWMIService = GetObject("winmgmts:\\.\root\cimv2")
+
+
+'Class: Win32_ComputerSystem
+'Property: DomainRole
+
+'Data type: uint16
+'Access type: Read-only
+
+'Role of a computer in an assigned domain workgroup. 
+'A domain workgroup is a collection of computers on the same network. 
+'For example, a DomainRole property may show that a computer is a member workstation. 
+
+'Value Meaning
+'0 (0x0) Standalone Workstation
+'1 (0x1) Member Workstation
+'2 (0x2) Standalone Server
+'3 (0x3) Member Server
+'4 (0x4) Backup Domain Controller
+'5 (0x5) Primary Domain Controller
+Set colItems = objWMIService.ExecQuery("Select * from Win32_ComputerSystem",,48)
+For Each objItem in colItems
+    strComputerDomain = objItem.Domain
+    if (objItem.DomainRole>1) then
+	Msg  "server detected"
+	wscript.quit
+    End if
+Next
+
+
+strUserDomain = wshNetwork.UserDomain
+'WScript.Echo "User: " & strUserDomain & "\" & oUser.sAMAccountName
+'WScript.Echo "Comp: " & strComputerDomain & "\" & ThisComp.cn
+
+on error resume next
+Thiscomp.put "Description", "" + oUser.cn + " с " + CStr(Now)
+ThisComp.Setinfo
+oUser.put "Description", "на " + ThisComp.cn + " с " + CStr(Now)
+oUser.Setinfo 
+
+scriptFolder = Left(WScript.ScriptFullName, InStrRev(WScript.ScriptFullName, "\"))
+inventoryScript=scriptFolder & "usr_logon_inventory.wsf" 
+
+Set oShell = Wscript.CreateObject("WScript.Shell")
+Msg "Forking " & inventoryScript
+oShell.Run inventoryScript
+
+Msg "Script complete."
+
+wscript.quit
+</script>
+</job>
