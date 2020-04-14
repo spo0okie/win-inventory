@@ -1,9 +1,9 @@
 <job id="logon_Descr">
 <script language="VBScript" src="../libs/lib_core.vbs" ></script>
 <script language="VBScript">
-'Скрипт регистрации пользователя на ПК
-'v0.3 - часть, отвечающая за инвентаризацию вынесена в отдельный скрипт, он вызывается в самом конце
-'v0.2 - переведено на WSH для подключения библиотек и ведения лога
+'РЎРєСЂРёРїС‚ СЂРµРіРёСЃС‚СЂР°С†РёРё РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РЅР° РџРљ
+'v0.3 - С‡Р°СЃС‚СЊ, РѕС‚РІРµС‡Р°СЋС‰Р°СЏ Р·Р° РёРЅРІРµРЅС‚Р°СЂРёР·Р°С†РёСЋ РІС‹РЅРµСЃРµРЅР° РІ РѕС‚РґРµР»СЊРЅС‹Р№ СЃРєСЂРёРїС‚, РѕРЅ РІС‹Р·С‹РІР°РµС‚СЃСЏ РІ СЃР°РјРѕРј РєРѕРЅС†Рµ
+'v0.2 - РїРµСЂРµРІРµРґРµРЅРѕ РЅР° WSH РґР»СЏ РїРѕРґРєР»СЋС‡РµРЅРёСЏ Р±РёР±Р»РёРѕС‚РµРє Рё РІРµРґРµРЅРёСЏ Р»РѕРіР°
 
 Dim adsinfo, ThisComp, oUser, oShell, strSessionName
 Set oShell = CreateObject("WScript.Shell")
@@ -57,9 +57,9 @@ strUserDomain = wshNetwork.UserDomain
 'WScript.Echo "Comp: " & strComputerDomain & "\" & ThisComp.cn
 
 on error resume next
-Thiscomp.put "Description", "" + oUser.cn + " с " + CStr(Now)
+Thiscomp.put "Description", "" + oUser.cn + " СЃ " + CStr(Now)
 ThisComp.Setinfo
-oUser.put "Description", "на " + ThisComp.cn + " с " + CStr(Now)
+oUser.put "Description", "РЅР° " + ThisComp.cn + " СЃ " + CStr(Now)
 oUser.Setinfo 
 
 scriptFolder = Left(WScript.ScriptFullName, InStrRev(WScript.ScriptFullName, "\"))
