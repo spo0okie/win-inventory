@@ -1,45 +1,27 @@
 <job id="logon_Descr">
 <script language="VBScript" src="../libs/lib_core.vbs" ></script>
+<script language="VBScript" src="../libs/lib_http.vbs" ></script>
 <script language="VBScript" src="../config.priv.vbs" ></script>
-<script language="javascript" runat="server">
-URL = {
-    encode : function(s){return encodeURIComponent(s).replace(/'/g,"%27").replace(/"/g,"%22")},
-    decode : function(s){return decodeURIComponent(s.replace(/\+/g,  " "))},
-    addslashes: function (s) {
-    if (!s) return '';
-    return s.replace(/\\/g, '\\\\').
-        replace(/\u0008/g, '\\b').
-        replace(/\t/g, '\\t').
-        replace(/\n/g, '\\n').
-        replace(/\f/g, '\\f').
-        replace(/\r/g, '\\r').
-        //replace(/'/g, '\\\'').
-        replace(/"/g, '\\"');
-     }
-
-}
-</script>
+<script language="javascript" runat="server" src="../libs/lib_url.js" ></script>
 <script language="VBScript">
 
 'Скрипт фиксирования регистрации пользователя на ПК в БД инвентаризации. 
 'Работает не так тупо как раньше - просто добавить запись в БД с текущим временем или попытаться через 5 минут.
 'Скрипт определяет время логина пользователя и пытается класть в БД именно набор логин+комп+время
 'и кладет только если такого набора там еще нет
+'v0.4 * функцонинал XML парсинга и HTTP REST вынесен в lib_http, URL.encdode/decode -> lib_url
 'v0.3 - вынесено в отдельный скрипт относительно скрипта логона, для запуска по шедулеру в любое время
 'v0.2 - переведено на WSH для подключения библиотек и ведения лога
 
-const scrName="gp_logonInventory" : const scrVer="0.3"
+const scrName="gp_logonInventory" : const scrVer="0.4"
 Dim adsinfo, ThisComp, oUser, logItems, oShell, strSessionName
 
-Set oShell = CreateObject("WScript.Shell")
-strSessionName = oShell.ExpandEnvironmentStrings( "%SESSIONNAME%" )
-if ( inStr(LCase(strSessionName),"rdp") <> 0 ) Then
-	'wscript.Echo "not in RDP"
-	wscript.quit
-End If
+'if ( inStr(LCase(SessionName),"rdp") <> 0 ) Then
+'	wscript.quit
+'End If
 
 
-Dim LogFile : Set logFile = objFSO.OpenTextFile(WorkDir & scrName & ".log", 8, True)
+logFile = WorkDir & scrName & ".log"
 Msg "-" : Msg "Script started: "&scrName&" "&scrVer
 
 Set adsinfo = CreateObject("adsysteminfo")
@@ -73,8 +55,7 @@ For Each objItem in logItems
 Next
 
 if (isnull(logonTime)) then
-	Msg "Error fetchin logon time"
-	wscript.quit
+	halt "Error fetchin logon time: " & logItems.count
 end if
 ' дата возвращается в формате 20191026103227.687031+300
 ' где цифры до точки - дата в местном часовом поясе, а после плюса (или теоретически минуса - смещение).
@@ -83,12 +64,8 @@ end if
 'wscript.echo logonTime
 
 dim year,mon,day,hour,min,sec,shift,sLogonDate,dLogonDate,uLogonDate
-year=Mid(logonTime,1,4)
-mon=Mid(logonTime,5,2)
-day=Mid(logonTime,7,2)
-hour=Mid(logonTime,9,2)
-min=Mid(logonTime,11,2)
-sec=Mid(logonTime,13,2)
+year=Mid(logonTime,1,4)  : mon=Mid(logonTime,5,2) : day=Mid(logonTime,7,2)
+hour=Mid(logonTime,9,2)  : min=Mid(logonTime,11,2): sec=Mid(logonTime,13,2)
 sLogonDate = day & "." & mon & "." & year & " " & hour & ":" & min & ":" & sec
 
 'ищем смещение
@@ -105,82 +82,30 @@ dLogonDate=dateAdd("n",shift,sLogonDate)
 
 'делаем UnixTime
 uLogonDate = DateDiff("s", "01/01/1970 00:00:00",dLogonDate)
-'wscript.echo uLogonDate
-'wscript.quit
 Msg "logonTime" & logonTime & "dDate:" & dLogonDate & " / uDate:" &uLogonDate
 
-'получает значение поля ID из XML ответа сервера или -1 если ID не найден
-function getResponseID(byVal Response)
-	getResponseID=-1
-
-	dim doc: Set doc = CreateObject("MSXML2.DOMDocument") 
-	doc.loadXML(Response)
-	Set nodes = doc.getElementsByTagName("id")
-	for each node in nodes
-		getResponseID=node.text
-	next
-end function
-
-
-
-'отправить данные POST запросом //нужно для новых записей в БД
-function postData(byVal host, byVal req, byVal data)
-	Dim  xmlHTTP
-	Set xmlHTTP = CreateObject("Microsoft.XMLHTTP")
-    
-	msg "HTTP POST-ing HTTP://"&host&"/"&req	'&"["&data&"]"
-	On Error Resume Next
-	xmlHTTP.Open "POST", "HTTP://"&host&"/"&req, false
-   	xmlHTTP.setRequestHeader "Content-Type", "application/x-www-form-urlencoded"
-   	xmlHTTP.setRequestHeader "Content-Length", CStr(Len(data))
-	xmlHTTP.SetRequestHeader "accept","application/xml"
-   	xmlHTTP.Send CStr(data)
-
-	Do While xmlHTTP.readystate <> 4: WScript.Sleep 200: Loop
-    	postData = xmlHTTP.responseText 
-End Function
-
-'отправить данные POST запросом //нужно для новых записей в БД
-function getData(byVal host, byVal req, byVal data)
-	Dim  xmlHTTP, url
-	Set xmlHTTP = CreateObject("Microsoft.XMLHTTP")
-    
-	url = "HTTP://" & host & "/" & req & "?" & data
-	msg "HTTP GET-ing " & url 
-	On Error Resume Next
-	xmlHTTP.Open "GET", url , false
-   	xmlHTTP.setRequestHeader "Content-Type", "application/x-www-form-urlencoded"
-	xmlHTTP.SetRequestHeader "accept","application/xml"
-   	xmlHTTP.Send
-
-	Do While xmlHTTP.readystate <> 4: WScript.Sleep 200: Loop
-    	getData = xmlHTTP.responseText 
-End Function
 
 'ищет запись этого логона в БД возвращает ID созданной/обновленной записи
 function setRecord(byVal comp, byVal name, byVal logonTime)
 	data="comp_name=" & comp & "&user_login=" & name & "&time=" & logonTime
 	
 	Msg "Searchin record id of " & data & " ..."
-	res=getData(inventory_apihost,"web/api/login-journal/search",data)
-	if (getResponseID(res) > -1) then
+	res=getXmlData(inventory_apihost & "/web/api/login-journal/search",data)
+	if (getXmlResponseID(res) > -1) then
 		updRecord="ok "& res
-		Msg "Record already set: "&res&"; Database OK"
+		Msg "Record already set: " & res & "; Database OK"
 	else
 	
 		Msg "Record not found. Creatin new rec..."
-		res=postData(inventory_apihost,"web/api/login-journal",data)
-		if (getResponseID(res) > -1) then
-			updRecord="ok "& res
-			Msg "Data sent: "&res&"; Database updated"
+		res=postXmlData(inventory_apihost & "/web/api/login-journal",data)
+		if (getXmlResponseID(res) > -1) then
+			updRecord="ok " & res
+			Msg "Data sent: " & res & "; Database updated"
 		else
 			Msg "Error sending data ... retrying in next launch"
 		end if
 		
 	end if
-
-	'wscript.echo data
-	'wscript.echo updRecord
 	
 end function
 

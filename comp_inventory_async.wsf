@@ -1,0 +1,47 @@
+<job id="Comp_inventory_async">
+<script language="VBScript" src="../libs/lib_core.vbs" ></script>
+<script language="VBScript" src="../libs/lib_http.vbs" ></script>
+<script language="VBScript" src="../libs/lib_displayinfo.vbs" ></script>
+<script language="VBScript" src="../config.priv.vbs" ></script>
+<script language="javascript" runat="server" src="../libs/lib_url.js" ></script>
+<script language="VBScript">
+'Скрипт асинхронной отправки данных собранных на другой машине (при отсутствии доступа на исходной машине к инвентаризации)
+
+compName=WScript.Arguments(0)
+compDomain="AZIMUTH"
+inventory_apihost = "inventory.azimuth.holding.local"
+
+const scrName="comp_Inventory_asyncPush" : const scrVer="0.1"
+logFile = WorkDir & scrName & ".log"
+Msg "-" : Msg "Script started: "&scrName&" "&scrVer
+
+
+'возвращает ID компьютера по домену, имени или -1 если не найден
+function getCompID(byVal domain, byVal name)
+	getCompID=getResponseID(getXMLData(inventory_apihost&"/web/api/comps/"&domain&"/"&name))
+	Msg "Got CompID="&getCompID&" from "&inventory_apihost&"/web/api/comps/"&domain&"/"&name
+end function
+
+dataFile="\\" & compname & "\c$\Windows\Temp\gp_compInventory.dat"
+if (objFSO.fileExists (dataFile)) then
+	data = getFile (dataFile)
+else
+	Halt "inventory data not found in " & dataFile & "!"
+end if
+
+compID=getCompID(compDomain, compName)
+
+if (compID>-1) then
+	res=putData(inventory_apihost&"/web/api/comps/"&compID,data)
+else
+	res=postData(inventory_apihost&"/web/api/comps",data)
+end if
+
+if (getXmlResponseID(res) > -1) then
+	Msg "ERR: failed send data to database: "&res
+elseif (compID>=0) then
+	Msg "Got actual compID "&res&"; Database updated"
+end if
+
+</script>
+</job>
