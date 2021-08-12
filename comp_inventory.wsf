@@ -6,6 +6,9 @@
 <script language="javascript" runat="server" src="../libs/lib_url.js" ></script>
 <script language="VBScript">
 'Скрипт сбора данных о конфигурации компа
+'v0.13 + Теперь ИД компьютера сохраняется в реестре
+'      * Теперь скрипт требует права админа
+'v0.12 * Имя компютера теперь берется полное (а не NETBIOS)
 'v0.11 * функцонинал XML парсинга и HTTP REST вынесен в lib_http, URL.encdode/decode -> lib_url
 'v0.10rc2 ! Все обращения к WMI теперь идут с отключением выброса ошибок и рассчитаны на возможность сбоя запроса
 'v0.10rc + Сохранение IP адреса(ов)
@@ -30,12 +33,16 @@
 '	отправки данных пока нет. только сбор
 
 
-const scrName="gp_compInventory" : const scrVer="0.11"
+const scrName="gp_compInventory" : const scrVer="0.13"
 logFile = WorkDir & scrName & ".log"
 
-Msg "-" : Msg "Script started: "&scrName&" "&scrVer
+Msg "-" : Msg "Script started: "&scrName&" "&scrVer&" (core "&coreLibVer&")"
 dim objWMIService
 Set objWMIService = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\cimv2")
+
+
+privelegeMe()
+'checkFullAdminRights()
 
 
 'поиск установленного софта в папке UNINSTALL в реестре - перебираем подпапки и ищем в них ProductName
@@ -122,12 +129,17 @@ function updRecord(byVal compID, byVal domainID, byVal name, byVal OS, byVal hw,
 		res=postXmlData(inventory_apihost & "/web/api/comps",data)
 	end if
 
-	if (getXmlResponseID(res) > -1) then
-		updRecord="ok"
+	id = getXmlResponseID(res)
+
+	if (id > -1) then
+		Msg "Got actual compID " & id & "; Database updated"
 	else
-		updRecord= vbCrLf & "data=" & data & vbCrLf & "response=" & res
+		Msg "ERR: failed send data to database: " & vbCrLf &_
+			"data=" & data & vbCrLf &_
+			"response=" & res
 	end if
-	
+
+	updRecord = id	
 end function
 
 ' получить IP-адрес
@@ -234,14 +246,13 @@ Next
 '	& "}}"
 'Next
 
-msg "Searching Domain name..."
+' Get Windows serial
+'Set colItems = objWMIService.ExecQuery( "Select * from SoftwareLicensingService", , 48 )
+'For Each objItem in colItems
+'	productList=productList & ",{""publisher"":""Microsoft"", ""name"":""Windows " & objItem.OA3xOriginalProductKeyDescription & """, ""key"":""" & objItem.OA3xOriginalProductKey & """}" '& vbCrLf
+'Next
 
 
-Set colItems = objWMIService.ExecQuery( "Select * from Win32_ComputerSystem", , 48 )
-For Each objItem in colItems
-	strComputerDomain = split(objItem.Domain,".")(0)
-	strComputerName = objItem.Name
-Next
 
 msg "Searching Display ..."
 
@@ -252,36 +263,50 @@ if (Len(monList)>0 ) then
 end if
 
 
-msg "Searching OS..."
-
-
-' Get Windows version 
+msg "Searching OS Version ..."
 Set colItems = objWMIService.ExecQuery( "Select * from Win32_OperatingSystem", , 48 )
 For Each objItem in colItems
 	strOS = objItem.Version&" "&objItem.Caption
 	if (Len(productList)>0) then productList=productList & ","
 	productList=productList & "{""publisher"":""Microsoft"", ""name"":""" & URL.addslashes(objItem.Caption) & """}" '& vbCrLf
 Next
-' Get Windows serial
-'Set colItems = objWMIService.ExecQuery( "Select * from SoftwareLicensingService", , 48 )
-'For Each objItem in colItems
-'	productList=productList & ",{""publisher"":""Microsoft"", ""name"":""Windows " & objItem.OA3xOriginalProductKeyDescription & """, ""key"":""" & objItem.OA3xOriginalProductKey & """}" '& vbCrLf
-'Next
+
+
+msg "Searching IPs ..."
+IPv4addrs=getIPv4addrs()
+
+dim domainID, compID
+
+msg "Searching Domain name..."
+Set colItems = objWMIService.ExecQuery( "Select * from Win32_ComputerSystem", , 48 )
+For Each objItem in colItems
+	strComputerDomain = split(objItem.Domain,".")(0)
+Next
 
 domainID=getDomainID(strComputerDomain)
 if (domainID = -1) then
-	Msg "Domain "&strComputerDomain&" not found in inventory database. Please add it manually"
-	domainID=""
+	Halt "Domain "&strComputerDomain&" not found in inventory database. Please add it manually"
+	'domainID=""
 	'wscript.quit
 end if
 
-compID=getCompID(strComputerDomain, strComputerName)
-IPv4addrs=getIPv4addrs()
-res=updRecord(compID, domainID, strComputerName, strOS, hwList, productList, IPv4addrs)
-if (res <> "ok") then
-	Msg "ERR: failed send data to database: "&res
-elseif (compID>=0) then
-	Msg "Got actual compID "&res&"; Database updated"
+msg "Searching OS..."
+
+const regStorage="HKEY_LOCAL_MACHINE\SOFTWARE\Reviakin\Inventory\"
+compID=regRead(regStorage & "compID")
+
+if (compID = false) then
+	msg "INFO: no saved CompID found. Searching in database..."
+	compID=getCompID(strComputerDomain, ComputerName)	
+else
+	msg "INFO: got CompID=" & CompID
+end if
+
+
+id = updRecord(compID, domainID, ComputerName, strOS, hwList, productList, IPv4addrs)
+
+if (id > -1) then
+	regWrite regStorage & "compID", "REG_SZ", id
 end if
 
 </script>
