@@ -32,6 +32,7 @@
 '	т.к. wmi отдает инфу только по продуктам установленным через MSI
 '	отправки данных пока нет. только сбор
 
+forceCscript
 
 const scrName="gp_compInventory" : const scrVer="0.13"
 logFile = WorkDir & scrName & ".log"
@@ -104,6 +105,12 @@ end function
 function getCompID(byVal domain, byVal name)
 	getCompID=getXmlResponseID(getXMLData(inventory_apihost&"/web/api/comps/"&domain&"/"&name))
 	Msg "Got CompID="&getCompID&" from "&inventory_apihost&"/web/api/comps/"&domain&"/"&name
+end function
+
+'возвращает ID компьютера по ID или -1 если не найден (проверка что ID есть в БД)
+function chkCompID(byVal id)
+	chkCompID=getXmlResponseID(getXMLData(inventory_apihost&"/web/api/comps/"&id))
+	Msg "Got CompID="&getCompID&" from "&inventory_apihost&"/web/api/comps/"&id
 end function
 
 'обновлеят запись компьютера в БД, если в качестве compID передано -1, то создает новую
@@ -293,10 +300,18 @@ end if
 msg "Searching OS..."
 
 const regStorage="HKEY_LOCAL_MACHINE\SOFTWARE\Reviakin\Inventory\"
-compID=regRead(regStorage & "compID")
+savedCompID=regRead(regStorage & "compID")
 
-if (compID = false) then
-	msg "INFO: no saved CompID found. Searching in database..."
+if (savedCompID > 0) then
+	msg "INFO: saved CompID found. Checking in database..."
+	compID=chkCompID(savedCompID)
+else
+	compID=-1
+end if
+
+
+if (compID = false or compID<1) then
+	msg "INFO: no valid saved CompID. Searching in database..."
 	compID=getCompID(strComputerDomain, ComputerName)	
 else
 	msg "INFO: got CompID=" & CompID
