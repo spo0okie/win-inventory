@@ -1,11 +1,13 @@
 <job id="Comp_inventory">
 <script language="VBScript" src="../libs/lib_core.vbs" ></script>
 <script language="VBScript" src="../libs/lib_http.vbs" ></script>
+<script language="VBScript" src="../libs/lib_time.vbs" ></script>
 <script language="VBScript" src="../libs/lib_displayinfo.vbs" ></script>
 <script language="VBScript" src="../config.priv.vbs" ></script>
 <script language="javascript" runat="server" src="../libs/lib_url.js" ></script>
 <script language="VBScript">
 'Скрипт сбора данных о конфигурации компа
+'v0.14 + Теперь собирается и MAC (Требуется поддержка со стороны БД)
 'v0.13 + Теперь ИД компьютера сохраняется в реестре
 '      * Теперь скрипт требует права админа
 'v0.12 * Имя компютера теперь берется полное (а не NETBIOS)
@@ -34,7 +36,7 @@
 
 forceCscript
 
-const scrName="gp_compInventory" : const scrVer="0.13"
+const scrName="gp_compInventory" : const scrVer="0.14"
 logFile = WorkDir & scrName & ".log"
 
 Msg "-" : Msg "Script started: "&scrName&" "&scrVer&" (core "&coreLibVer&")"
@@ -42,7 +44,7 @@ dim objWMIService
 Set objWMIService = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\cimv2")
 
 
-privelegeMe()
+'privelegeMe()
 'checkFullAdminRights()
 
 
@@ -115,8 +117,8 @@ end function
 
 'обновлеят запись компьютера в БД, если в качестве compID передано -1, то создает новую
 'возвращает ID созданной/обновленной записи
-function updRecord(byVal compID, byVal domainID, byVal name, byVal OS, byVal hw, byVal sw, byVal ip)
-	datetime = Year(now) & "-" & Month(now) & "-" & Day(now) & " " & Hour(now) & ":" & Minute(now)
+function updRecord(byVal compID, byVal domainID, byVal name, byVal OS, byVal hw, byVal sw, byVal ip, byVal mac)
+	datetime = Replace(timeGetUtcTimestamp,"/","-")
 	data=_
 	"domain_id="&domainID&_
 	"&name="&Url.Encode(name)&_
@@ -125,6 +127,7 @@ function updRecord(byVal compID, byVal domainID, byVal name, byVal OS, byVal hw,
 	"&raw_soft="&Url.Encode(sw)&_
 	"&raw_version="&Url.Encode(scrVer)&_
 	"&ip="&Url.Encode(ip)&_
+	"&mac="&Url.Encode(mac)&_
 	"&updated_at="&Url.Encode(datetime)
 
 	'сохраняем данные в отдельный файлик. На случай если с сервером связаться не удастся
@@ -157,14 +160,30 @@ function getIPv4addrs()
 	dim IPConfigSet: Set IPConfigSet = objWMIService.ExecQuery("Select IPAddress from Win32_NetworkAdapterConfiguration where ipenabled = true")
 	dim IPConfig 
 	for each IPConfig in IPConfigSet
-	    	if Not IsNull(IPConfig.IPAddress) then 
-	        	for i=LBound(IPConfig.IPAddress) to UBound(IPConfig.IPAddress)
-	            		If InStr(IPConfig.IPAddress(i),":") = 0 Then Text = Text & IPConfig.IPAddress(i)& VbCrLf
-	        	next
+    	if Not IsNull(IPConfig.IPAddress) then 
+        	for i=LBound(IPConfig.IPAddress) to UBound(IPConfig.IPAddress)
+           		If InStr(IPConfig.IPAddress(i),":") = 0 Then Text = Text & IPConfig.IPAddress(i)& VbCrLf
+        	next
 		end if
 	next
 	on error goto 0
 	getIPv4addrs=Text
+end function
+
+' получить MAC-адрес
+function getMACaddrs()
+	dim Text 
+	Text = ""
+	on error resume next
+	dim IPConfigSet: Set IPConfigSet = objWMIService.ExecQuery("Select MACAddress from Win32_NetworkAdapterConfiguration where ipenabled = true")
+	dim IPConfig 
+	for each IPConfig in IPConfigSet
+		if Not IsNull(IPConfig.MACAddress) then 
+	    	Text = Text & IPConfig.MACAddress(i)& VbCrLf
+		end if
+	next
+	on error goto 0
+	getMACaddrs=Text
 end function
 
 'заполняем отпечаток софта
@@ -281,6 +300,7 @@ Next
 
 msg "Searching IPs ..."
 IPv4addrs=getIPv4addrs()
+MACaddrs=getMACAddrs()
 
 dim domainID, compID
 
@@ -317,8 +337,7 @@ else
 	msg "INFO: got CompID=" & CompID
 end if
 
-
-id = updRecord(compID, domainID, ComputerName, strOS, hwList, productList, IPv4addrs)
+id = updRecord(compID, domainID, ComputerName, strOS, hwList, productList, IPv4addrs, MACaddrs)
 
 if (id > -1) then
 	regWrite regStorage & "compID", "REG_SZ", id
