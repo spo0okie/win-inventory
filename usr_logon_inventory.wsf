@@ -6,96 +6,163 @@
 <script language="VBScript" src="../config.priv.vbs" ></script>
 <script language="javascript" runat="server" src="../libs/lib_url.js" ></script>
 <script language="VBScript">
+Option explicit
 
 'Скрипт фиксирования регистрации пользователя на ПК в БД инвентаризации. 
 'Работает не так тупо как раньше - просто добавить запись в БД с текущим временем или попытаться через 5 минут.
 'Скрипт определяет время логина пользователя и пытается класть в БД именно набор логин+комп+время
 'и кладет только если такого набора там еще нет
+'v0.6 + отправляет и RDP входы, но указывает в журнале что это именно RDP
+'v0.5 * отправляет время из журнала WMI, а не из момента запуска ПК
 'v0.4 * функцонинал XML парсинга и HTTP REST вынесен в lib_http, URL.encdode/decode -> lib_url
 'v0.3 - вынесено в отдельный скрипт относительно скрипта логона, для запуска по шедулеру в любое время
 'v0.2 - переведено на WSH для подключения библиотек и ведения лога
-const scrName="gp_logonInventory" : const scrVer="0.5"
+const scrName="gp_logonInventory" : const scrVer="0.6"
 Dim adsinfo, logItems, oShell, strSessionName, vbsTimestamp, strTimestamp, unixTimestamp
 
-'if ( inStr(LCase(SessionName),"rdp") <> 0 ) Then
-'	wscript.quit
-'End If
+
+'Logon Types
+'0 Used only by the System account.
+'Interactive (2) Intended for users who are interactively using the machine, such as a user being logged on by a terminal server, remote shell, or similar process.
+'Network (3) Intended for high-performance servers to authenticate clear text passwords. LogonUser does not cache credentials for this logon type.
+'Batch (4) Intended for batch servers, where processes can be executed on behalf of a user without their direct intervention; or for higher performance servers that process many clear-text authentication attempts at a time, such as mail or web servers. LogonUser does not cache credentials for this logon type.
+'Service (5) Indicates a service-type logon. The account provided must have the service privilege enabled.
+'Proxy (6) Indicates a proxy-type logon.
+'Unlock (7) This logon type is intended for GINA DLLs logging on users who are interactively using the machine. This logon type allows a unique audit record to be generated that shows when the workstation was unlocked.
+'NetworkCleartext (8) Preserves the name and password in the authentication packages, allowing the server to make connections to other network servers while impersonating the client. This allows a server to accept clear text credentials from a client, call LogonUser, verify that the user can access the system across the network, and still communicate with other servers.
+'NewCredentials (9) Allows the caller to clone its current token and specify new credentials for outbound connections. The new logon session has the same local identify, but uses different credentials for other network connections.
+'RemoteInteractive (10) Terminal Services session that is both remote and interactive.
+'CachedInteractive (11) Attempt cached credentials without accessing the network.
+'CachedRemoteInteractive (12) Same as RemoteInteractive. This is used for internal auditing.
+'CachedUnlock (13) Workstation logon.
 
 
-logFile = WorkDir & scrName & ".log"
+Class logonEventClass
+	dim wmiType,invType, unixTime, strTime, vbsTime
+	
+	Function setWmiTime(wmiTime)
+		vbsTime = timeWmiToVbs(wmiTime)
+		strTime = timeVbsToTimestamp(vbsTime)
+		unixTime = timeVbsToUnix(vbsTime)		
+	End function
+
+	Function typeConvert(winType)
+		wmiType=winType
+		Select case winType
+			case 2
+				invType=0
+			case 11
+				invType=0
+			case 10
+				invType=1
+			case 12
+				invType=1
+			case else
+				invType=-1
+		end select
+	End function
+
+	Function varDump()
+		Msg "Logon: [type:" & wmiType & "->" & invType & ", time:" & strTime & ", unix:" & unixTime & "]"
+	End Function
+
+	Function keyString()
+		keyString = invType & "-" & unixTime
+	End Function
+
+	Function sameWith(other)
+		if (other.invType = invType) and (other.unixTime = unixTime) then
+			sameWith = true
+		else
+			sameWith = false
+		end if
+	End function
+
+	
+
+	'ищет запись этого логона в БД возвращает ID созданной/обновленной записи
+	function setRecord(byVal comp, byVal name)
+		dim data, res, updRecord
+		data="comp_name=" & comp & "&user_login=" & name & "&time=" & unixTime & "&type=" & invType
+	
+		Msg "Searchin record id of " & data & " ..."
+		on error resume next
+		res=getXmlData (inventory_apihost & "/web/api/login-journal/search?" & data)
+		on error goto 0
+		if (getXmlResponseID(res) > -1) then
+			updRecord="ok "& res
+			Msg "Record already set: " & res & "; Database OK"
+		else
+	
+			Msg "Record not found. Creatin new rec..."
+			on error resume next
+			res=postXmlData(inventory_apihost & "/web/api/login-journal",data)
+			on error goto 0
+			if (getXmlResponseID(res) > -1) then
+				updRecord="ok " & res
+				Msg "Data sent: " & res & "; Database updated"
+			else
+				Msg "Error sending data ... retrying in next launch"
+				Msg data
+				Msg res
+			end if
+		
+		end if
+	
+	end function
+
+	
+End Class
+
+
+
+dim logFile: logFile = WorkDir & scrName & ".log"
 Msg "-" : Msg "Script started: "&scrName&" "&scrVer
 
-Set wshNetwork = CreateObject( "WScript.Network" )
-Set objWMIService = GetObject("winmgmts:\\.\root\cimv2")
-vbsTimestamp = timeLogonVbs
-if (isnull(vbsTimestamp)) then
-	halt "Error fetchin logon time"
-end if
 
-strTimestamp = timeVbsToTimestamp(vbsTimestamp)
-unixTimestamp = timeVbsToUnix(vbsTimestamp)
-Msg strTimestamp & "(" & unixTimeStamp & ")"
-
-'ищет запись этого логона в БД возвращает ID созданной/обновленной записи
-function setRecord(byVal comp, byVal name, byVal logonTime)
-	data="comp_name=" & comp & "&user_login=" & name & "&time=" & logonTime
-	
-	Msg "Searchin record id of " & data & " ..."
-	res=getXmlData (inventory_apihost & "/web/api/login-journal/search?" & data)
-	if (getXmlResponseID(res) > -1) then
-		updRecord="ok "& res
-		Msg "Record already set: " & res & "; Database OK"
-	else
-	
-		Msg "Record not found. Creatin new rec..."
-		res=postXmlData(inventory_apihost & "/web/api/login-journal",data)
-		if (getXmlResponseID(res) > -1) then
-			updRecord="ok " & res
-			Msg "Data sent: " & res & "; Database updated"
-		else
-			Msg "Error sending data ... retrying in next launch"
-			Msg data
-			Msg res
-		end if
-		
-	end if
-	
-end function
-
-
-'Class: Win32_ComputerSystem
-'Property: DomainRole
-
-'Data type: uint16
-'Access type: Read-only
-
-'Role of a computer in an assigned domain workgroup. 
-'A domain workgroup is a collection of computers on the same network. 
-'For example, a DomainRole property may show that a computer is a member workstation. 
-
-'Value Meaning
-'0 (0x0) Standalone Workstation
-'1 (0x1) Member Workstation
-'2 (0x2) Standalone Server
-'3 (0x3) Member Server
-'4 (0x4) Backup Domain Controller
-'5 (0x5) Primary Domain Controller
-Set colItems = objWMIService.ExecQuery("Select * from Win32_ComputerSystem",,48)
-For Each objItem in colItems
+dim wshNetwork: Set wshNetwork = CreateObject( "WScript.Network" )
+dim strUserDomain, strComputerDomain
+dim objWMIService: Set objWMIService = GetObject("winmgmts:\\.\root\cimv2")
+dim objItems, objItem
+Set objItems = objWMIService.ExecQuery("Select * from Win32_ComputerSystem",,48)
+For Each objItem in objItems
     strComputerDomain = objItem.Domain
-    if (objItem.DomainRole>1) then
-		Msg  "server detected"
-		wscript.quit
-    End if
 Next
-
-
 strUserDomain = wshNetwork.UserDomain
-'WScript.Echo "User: " & strUserDomain & "\" & oUser.sAMAccountName
-'WScript.Echo "Comp: " & strComputerDomain & "\" & ThisComp.cn
 
-on error resume next
-res=setRecord (strComputerDomain & "\" & objComputer.cn , strUserDomain & "\" & objUser.sAMAccountName, unixTimestamp)
+
+'почемуто вот этот вот запрос отдает мне 2 элемента. по собственно времени логона они практически идентичны
+'отличаются в микросекундах, но все же отличны. потому данные кладем в словарь с точностью до секунд
+Set objItems = objWMIService.ExecQuery ("Select * from Win32_LogonSession")
+dim objLogons: set objLogons = CreateObject("Scripting.Dictionary")
+dim logonEvent
+
+
+For Each objItem in objItems
+	'	Msg "AuthenticationPackage: " & objItem.AuthenticationPackage &VBCR _
+	'	& "Caption: " & objItem.Caption &VBCR _
+	'	& "Description: " & objItem.Description &VBCR _
+	'	& "InstallDate: " & objItem.InstallDate &VBCR _
+	'	& "LogonId: " & objItem.LogonId &VBCR _
+	'	& "Name: " & objItem.Name &VBCR _
+	'	& "LogonType: " & objItem.LogonType &VBCR _
+	'	& "StartTime: " & objItem.StartTime &VBCR _
+	'	& "Status: " & objItem.Status
+
+	set logonEvent = new logonEventClass
+	'objLogons(eventsCount-1) = new 
+	
+	with logonEvent
+		.typeConvert(objItem.LogonType)
+		.setWmiTime(objItem.startTime)
+		if (.invType >=0) and (not objLogons.exists(.keyString())) then
+			objLogons.Add .keyString(), logonEvent
+			.varDump
+			.setRecord strComputerDomain & "\" & objComputer.cn , strUserDomain & "\" & objUser.sAMAccountName
+		end if
+	end with
+	
+Next
 Msg "Script complete."
 
 wscript.quit
