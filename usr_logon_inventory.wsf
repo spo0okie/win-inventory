@@ -7,17 +7,18 @@
 <script language="javascript" runat="server" src="../libs/lib_url.js" ></script>
 <script language="VBScript">
 Option explicit
-
+DEBUGMODE=1
 'Скрипт фиксирования регистрации пользователя на ПК в БД инвентаризации. 
 'Работает не так тупо как раньше - просто добавить запись в БД с текущим временем или попытаться через 5 минут.
 'Скрипт определяет время логина пользователя и пытается класть в БД именно набор логин+комп+время
 'и кладет только если такого набора там еще нет
+'v0.7 + отправляет локальное время ПК для обнаружения сдвига времени ПК относительно времени сервера и для правки времени логона в обратную сторону
 'v0.6 + отправляет и RDP входы, но указывает в журнале что это именно RDP
 'v0.5 * отправляет время из журнала WMI, а не из момента запуска ПК
 'v0.4 * функцонинал XML парсинга и HTTP REST вынесен в lib_http, URL.encdode/decode -> lib_url
 'v0.3 - вынесено в отдельный скрипт относительно скрипта логона, для запуска по шедулеру в любое время
 'v0.2 - переведено на WSH для подключения библиотек и ведения лога
-const scrName="gp_logonInventory" : const scrVer="0.6"
+const scrName="gp_logonInventory" : const scrVer="0.7"
 Dim adsinfo, logItems, oShell, strSessionName, vbsTimestamp, strTimestamp, unixTimestamp
 
 
@@ -83,7 +84,7 @@ Class logonEventClass
 	'ищет запись этого логона в БД возвращает ID созданной/обновленной записи
 	function setRecord(byVal comp, byVal name)
 		dim data, res, updRecord
-		data="comp_name=" & comp & "&user_login=" & name & "&time=" & unixTime & "&type=" & invType
+		data="comp_name=" & comp & "&user_login=" & name & "&time=" & unixTime & "&type=" & invType & "&local_time=" & timeGetUnixEpoch
 	
 		Msg "Searchin record id of " & data & " ..."
 		on error resume next
