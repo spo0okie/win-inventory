@@ -7,18 +7,22 @@
 <script language="javascript" runat="server" src="../libs/lib_url.js" ></script>
 <script language="VBScript">
 Option explicit
-DEBUGMODE=1
+DEBUGMODE=0
 'Скрипт фиксирования регистрации пользователя на ПК в БД инвентаризации. 
 'Работает не так тупо как раньше - просто добавить запись в БД с текущим временем или попытаться через 5 минут.
 'Скрипт определяет время логина пользователя и пытается класть в БД именно набор логин+комп+время
 'и кладет только если такого набора там еще нет
+'V0.8 ! оказалось что при запуске WMI запроса с правами админа, он отдает журнал входов всех пользователей. В связи с этим на каждую запись в журнале дополнительно запрашиваем
+'	пользоветеля, который инициировал сессию
+'	также скидываем привилегии при старте через launchpad
 'v0.7 + отправляет локальное время ПК для обнаружения сдвига времени ПК относительно времени сервера и для правки времени логона в обратную сторону
 'v0.6 + отправляет и RDP входы, но указывает в журнале что это именно RDP
 'v0.5 * отправляет время из журнала WMI, а не из момента запуска ПК
 'v0.4 * функцонинал XML парсинга и HTTP REST вынесен в lib_http, URL.encdode/decode -> lib_url
 'v0.3 - вынесено в отдельный скрипт относительно скрипта логона, для запуска по шедулеру в любое время
 'v0.2 - переведено на WSH для подключения библиотек и ведения лога
-const scrName="gp_logonInventory" : const scrVer="0.7"
+unPrivelegeMe
+const scrName="gp_logonInventory" : const scrVer="0.8"
 Dim adsinfo, logItems, oShell, strSessionName, vbsTimestamp, strTimestamp, unixTimestamp
 
 
@@ -39,7 +43,7 @@ Dim adsinfo, logItems, oShell, strSessionName, vbsTimestamp, strTimestamp, unixT
 
 
 Class logonEventClass
-	dim wmiType,invType, unixTime, strTime, vbsTime
+	dim wmiType,invType, unixTime, strTime, vbsTime, strUserName, strDomainName
 	
 	Function setWmiTime(wmiTime)
 		vbsTime = timeWmiToVbs(wmiTime)
@@ -63,28 +67,42 @@ Class logonEventClass
 		end select
 	End function
 
+	function init(logonEvent)
+		init = false
+		typeConvert(logonEvent.LogonType)
+		if invType<0 then exit function
+		
+		setWmiTime(objItem.startTime)
+		
+		dim colList, objUser
+		Set colList = objWMIService.ExecQuery("Associators of {Win32_LogonSession.LogonId=" & logonEvent.LogonId & "} Where AssocClass=Win32_LoggedOnUser Role=Dependent" )
+        
+		strUserName=""
+		strDomainName=""
+		For Each objUser in colList
+			strUserName = objUser.Name
+			strDomainName = objUser.Domain
+		Next
+
+		if strUserName="" or strDomainName="" then exit function
+
+		init = true
+	end function
+
 	Function varDump()
-		Msg "Logon: [type:" & wmiType & "->" & invType & ", time:" & strTime & ", unix:" & unixTime & "]"
+		Msg "Logon: [type:" & wmiType & "->" & invType & ", time:" & strTime & ", unix:" & unixTime & " // " & strUserDomain & "\" & strUserName &"]"
 	End Function
 
 	Function keyString()
-		keyString = invType & "-" & unixTime
+		keyString = invType & "-" & unixTime & "-" & strUserName
 	End Function
 
-	Function sameWith(other)
-		if (other.invType = invType) and (other.unixTime = unixTime) then
-			sameWith = true
-		else
-			sameWith = false
-		end if
-	End function
 
-	
 
 	'ищет запись этого логона в БД возвращает ID созданной/обновленной записи
-	function setRecord(byVal comp, byVal name)
+	function setRecord(byVal comp)
 		dim data, res, updRecord
-		data="comp_name=" & comp & "&user_login=" & name & "&time=" & unixTime & "&type=" & invType & "&local_time=" & timeGetUnixEpoch
+		data="comp_name=" & comp & "&user_login=" & strUserDomain & "\" & strUserName & "&time=" & unixTime & "&type=" & invType & "&local_time=" & timeGetUnixEpoch
 	
 		Msg "Searchin record id of " & data & " ..."
 		on error resume next
@@ -123,7 +141,7 @@ Msg "-" : Msg "Script started: "&scrName&" "&scrVer
 
 dim wshNetwork: Set wshNetwork = CreateObject( "WScript.Network" )
 dim strUserDomain, strComputerDomain
-dim objWMIService: Set objWMIService = GetObject("winmgmts:\\.\root\cimv2")
+dim objWMIService: Set objWMIService = GetObject("winmgmts:{impersonationLevel=Impersonate}\\.\root\cimv2")
 dim objItems, objItem
 Set objItems = objWMIService.ExecQuery("Select * from Win32_ComputerSystem",,48)
 For Each objItem in objItems
@@ -137,29 +155,37 @@ strUserDomain = wshNetwork.UserDomain
 Set objItems = objWMIService.ExecQuery ("Select * from Win32_LogonSession")
 dim objLogons: set objLogons = CreateObject("Scripting.Dictionary")
 dim logonEvent
-
+dim colList, objUser
 
 For Each objItem in objItems
-	'	Msg "AuthenticationPackage: " & objItem.AuthenticationPackage &VBCR _
-	'	& "Caption: " & objItem.Caption &VBCR _
-	'	& "Description: " & objItem.Description &VBCR _
-	'	& "InstallDate: " & objItem.InstallDate &VBCR _
-	'	& "LogonId: " & objItem.LogonId &VBCR _
-	'	& "Name: " & objItem.Name &VBCR _
-	'	& "LogonType: " & objItem.LogonType &VBCR _
-	'	& "StartTime: " & objItem.StartTime &VBCR _
-	'	& "Status: " & objItem.Status
+	'WScript.Echo "AuthenticationPackage: " & objItem.AuthenticationPackage 
+	'WScript.Echo "Caption: " & objItem.Caption
+	'WScript.Echo "Description: " & objItem.Description
+	'WScript.Echo "InstallDate: " & objItem.InstallDate
+	'WScript.Echo "LogonId: " & objItem.LogonId
+	'WScript.Echo "Name: " & objItem.Name
+	'WScript.Echo "LogonType: " & objItem.LogonType
+	'WScript.Echo "StartTime: " & objItem.StartTime
+	'WScript.Echo "Status: " & objItem.Status
 
-	set logonEvent = new logonEventClass
-	'objLogons(eventsCount-1) = new 
+	'Set colList = objWMIService.ExecQuery("Associators of " _
+	'	& "{Win32_LogonSession.LogonId=" & objItem.LogonId & "} " _
+	'	& "Where AssocClass=Win32_LoggedOnUser Role=Dependent" )
+        '
+	'	For Each objUser in colList
+	'		WScript.Echo "User: " & objUser.Name
+	'		WScript.Echo "Domain: " & objUser.Domain
+	'		WScript.Echo
+	'	Next
 	
+	set logonEvent = new logonEventClass
 	with logonEvent
-		.typeConvert(objItem.LogonType)
-		.setWmiTime(objItem.startTime)
-		if (.invType >=0) and (not objLogons.exists(.keyString())) then
-			objLogons.Add .keyString(), logonEvent
-			.varDump
-			.setRecord strComputerDomain & "\" & objComputer.cn , strUserDomain & "\" & objUser.sAMAccountName
+		if (.init(objItem)) then		
+			if not objLogons.exists(.keyString()) then
+				objLogons.Add .keyString(), logonEvent
+				.varDump
+				.setRecord strComputerDomain & "\" & objComputer.cn
+			end if
 		end if
 	end with
 	
