@@ -1,28 +1,31 @@
 <job id="logon_Descr">
 <script language="VBScript" src="../libs/lib_core.vbs" ></script>
 <script language="VBScript" src="../libs/lib_http.vbs" ></script>
-<script language="VBScript" src="../libs/lib_aduser.vbs" ></script>
 <script language="VBScript" src="../libs/lib_time.vbs" ></script>
 <script language="VBScript" src="../config.priv.vbs" ></script>
 <script language="javascript" runat="server" src="../libs/lib_url.js" ></script>
 <script language="VBScript">
 Option explicit
 DEBUGMODE=0
+
 'Скрипт фиксирования регистрации пользователя на ПК в БД инвентаризации. 
 'Работает не так тупо как раньше - просто добавить запись в БД с текущим временем или попытаться через 5 минут.
 'Скрипт определяет время логина пользователя и пытается класть в БД именно набор логин+комп+время
 'и кладет только если такого набора там еще нет
-'V0.8 ! оказалось что при запуске WMI запроса с правами админа, он отдает журнал входов всех пользователей. В связи с этим на каждую запись в журнале дополнительно запрашиваем
-'	пользоветеля, который инициировал сессию
-'	также скидываем привилегии при старте через launchpad
-'v0.7 + отправляет локальное время ПК для обнаружения сдвига времени ПК относительно времени сервера и для правки времени логона в обратную сторону
-'v0.6 + отправляет и RDP входы, но указывает в журнале что это именно RDP
-'v0.5 * отправляет время из журнала WMI, а не из момента запуска ПК
-'v0.4 * функцонинал XML парсинга и HTTP REST вынесен в lib_http, URL.encdode/decode -> lib_url
-'v0.3 - вынесено в отдельный скрипт относительно скрипта логона, для запуска по шедулеру в любое время
-'v0.2 - переведено на WSH для подключения библиотек и ведения лога
+'V0.8.1 * небольшие фиксы. выкинута библиотека lib_aduser, т.к. она выбрасывала ошибку при недоступности контроллера домена (инициируется с запросами к GC/LDAP)
+'		все данные мы получаем через WMI запрос, потому либу убрал за ненадобностью
+'		НО по факту при отсутствии связи с контроллером домена WMI запрос не может вернуть имя пользователя инициировавшего сессию
+'V0.8	! оказалось что при запуске WMI запроса с правами админа, он отдает журнал входов всех пользователей. В связи с этим на каждую запись в журнале дополнительно запрашиваем
+'		пользоветеля, который инициировал сессию (чтобы не заявить что все сессии инициированы пользователем-админом, т.к. по факту это не так.)
+'		также скидываем привилегии при старте через launchpad
+'v0.7 	+ отправляет локальное время ПК для обнаружения сдвига времени ПК относительно времени сервера и для правки времени логона в обратную сторону
+'v0.6 	+ отправляет и RDP входы, но указывает в журнале что это именно RDP
+'v0.5 	* отправляет время из журнала WMI, а не из момента запуска ПК
+'v0.4 	* функцонинал XML парсинга и HTTP REST вынесен в lib_http, URL.encdode/decode -> lib_url
+'v0.3 	- вынесено в отдельный скрипт относительно скрипта логона, для запуска по шедулеру в любое время
+'v0.2 	- переведено на WSH для подключения библиотек и ведения лога
 unPrivelegeMe
-const scrName="gp_logonInventory" : const scrVer="0.8"
+const scrName="gp_logonInventory" : const scrVer="0.8.1"
 Dim adsinfo, logItems, oShell, strSessionName, vbsTimestamp, strTimestamp, unixTimestamp
 
 
@@ -53,6 +56,7 @@ Class logonEventClass
 
 	Function typeConvert(winType)
 		wmiType=winType
+		invType=-1
 		Select case winType
 			case 2
 				invType=0
@@ -62,8 +66,6 @@ Class logonEventClass
 				invType=1
 			case 12
 				invType=1
-			case else
-				invType=-1
 		end select
 	End function
 
@@ -90,7 +92,7 @@ Class logonEventClass
 	end function
 
 	Function varDump()
-		Msg "Logon: [type:" & wmiType & "->" & invType & ", time:" & strTime & ", unix:" & unixTime & " // " & strUserDomain & "\" & strUserName &"]"
+		Msg "Logon: [type:" & wmiType & "->" & invType & ", time:" & strTime & ", unix:" & unixTime & " // " & strDomainName & "\" & strUserName &"]"
 	End Function
 
 	Function keyString()
@@ -102,7 +104,7 @@ Class logonEventClass
 	'ищет запись этого логона в БД возвращает ID созданной/обновленной записи
 	function setRecord(byVal comp)
 		dim data, res, updRecord
-		data="comp_name=" & comp & "&user_login=" & strUserDomain & "\" & strUserName & "&time=" & unixTime & "&type=" & invType & "&local_time=" & timeGetUnixEpoch
+		data="comp_name=" & comp & "&user_login=" & strDomainName & "\" & strUserName & "&time=" & unixTime & "&type=" & invType & "&local_time=" & timeGetUnixEpoch
 	
 		Msg "Searchin record id of " & data & " ..."
 		on error resume next
@@ -140,14 +142,15 @@ Msg "-" : Msg "Script started: "&scrName&" "&scrVer
 
 
 dim wshNetwork: Set wshNetwork = CreateObject( "WScript.Network" )
-dim strUserDomain, strComputerDomain
+dim strComputerName, strComputerDomain
 dim objWMIService: Set objWMIService = GetObject("winmgmts:{impersonationLevel=Impersonate}\\.\root\cimv2")
 dim objItems, objItem
+
 Set objItems = objWMIService.ExecQuery("Select * from Win32_ComputerSystem",,48)
 For Each objItem in objItems
     strComputerDomain = objItem.Domain
+	strComputerName = objItem.Name
 Next
-strUserDomain = wshNetwork.UserDomain
 
 
 'почемуто вот этот вот запрос отдает мне 2 элемента. по собственно времени логона они практически идентичны
@@ -158,15 +161,17 @@ dim logonEvent
 dim colList, objUser
 
 For Each objItem in objItems
-	'WScript.Echo "AuthenticationPackage: " & objItem.AuthenticationPackage 
-	'WScript.Echo "Caption: " & objItem.Caption
-	'WScript.Echo "Description: " & objItem.Description
-	'WScript.Echo "InstallDate: " & objItem.InstallDate
-	'WScript.Echo "LogonId: " & objItem.LogonId
-	'WScript.Echo "Name: " & objItem.Name
-	'WScript.Echo "LogonType: " & objItem.LogonType
-	'WScript.Echo "StartTime: " & objItem.StartTime
-	'WScript.Echo "Status: " & objItem.Status
+	if DEBUGMODE then
+		WScript.Echo "AuthenticationPackage: " & objItem.AuthenticationPackage 
+		WScript.Echo "Caption: " & objItem.Caption
+		WScript.Echo "Description: " & objItem.Description
+		WScript.Echo "InstallDate: " & objItem.InstallDate
+		WScript.Echo "LogonId: " & objItem.LogonId
+		WScript.Echo "Name: " & objItem.Name
+		WScript.Echo "LogonType: " & objItem.LogonType
+		WScript.Echo "StartTime: " & objItem.StartTime
+		WScript.Echo "Status: " & objItem.Status
+	end if
 
 	'Set colList = objWMIService.ExecQuery("Associators of " _
 	'	& "{Win32_LogonSession.LogonId=" & objItem.LogonId & "} " _
@@ -184,7 +189,7 @@ For Each objItem in objItems
 			if not objLogons.exists(.keyString()) then
 				objLogons.Add .keyString(), logonEvent
 				.varDump
-				.setRecord strComputerDomain & "\" & objComputer.cn
+				.setRecord strComputerDomain & "\" & strComputerName
 			end if
 		end if
 	end with
