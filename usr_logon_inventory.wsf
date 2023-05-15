@@ -26,7 +26,7 @@ DEBUGMODE=0
 'v0.3 	- вынесено в отдельный скрипт относительно скрипта логона, для запуска по шедулеру в любое время
 'v0.2 	- переведено на WSH для подключения библиотек и ведения лога
 unPrivelegeMe
-const scrName="gp_logonInventory" : const scrVer="0.8.2"
+const scrName="gp_logonInventory" : const scrVer="0.8.3"
 Dim adsinfo, logItems, oShell, strSessionName, vbsTimestamp, strTimestamp, unixTimestamp
 
 
@@ -86,11 +86,12 @@ Class logonEventClass
         
 		strUserName=""
 		strDomainName=""
-		For Each objUser in colList
-			strUserName = objUser.Name
-			strDomainName = objUser.Domain
-		Next
-
+		if Ubound(colList)>0 then
+			For Each objUser in colList
+				strUserName = objUser.Name
+				strDomainName = objUser.Domain
+			Next
+		end if
 		if strUserName="" or strDomainName="" then exit function
 
 		init = true
