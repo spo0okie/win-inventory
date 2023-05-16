@@ -12,6 +12,7 @@ DEBUGMODE=0
 'Работает не так тупо как раньше - просто добавить запись в БД с текущим временем или попытаться через 5 минут.
 'Скрипт определяет время логина пользователя и пытается класть в БД именно набор логин+комп+время
 'и кладет только если такого набора там еще нет
+'v0.8.5 * WMI запрос завернут в игнор ошибок, чтобы не выбрасывать их пользователю
 'v0.8.4 * Добавлена отладка, удален лишний объект WMI
 'v0.8.3 * Попытка обработать ошибки доступа
 'v0.8.2 ! защита от отправки данных со сбитыми часами (не отправляем данные старее 30 дней)
@@ -27,8 +28,8 @@ DEBUGMODE=0
 'v0.4 	* функцонинал XML парсинга и HTTP REST вынесен в lib_http, URL.encdode/decode -> lib_url
 'v0.3 	- вынесено в отдельный скрипт относительно скрипта логона, для запуска по шедулеру в любое время
 'v0.2 	- переведено на WSH для подключения библиотек и ведения лога
-unPrivelegeMe
-const scrName="gp_logonInventory" : const scrVer="0.8.4"
+'unPrivelegeMe
+const scrName="gp_logonInventory" : const scrVer="0.8.5"
 Dim adsinfo, logItems, oShell, strSessionName, vbsTimestamp, strTimestamp, unixTimestamp
 
 
@@ -85,7 +86,7 @@ Class logonEventClass
 		'сценарий когда комп загрузился со сбитыми часами (2001-01-01 00:00:00), зафиксировал в журнале событие входа в 5 минут 1 января
 		'а потом часы выставились правильно, и при отправке информации уже не видно сдвига по времени
 		'в итоге не отправляем данные о событиях более чем месяц назад
-		if (timeGetUnixEpoch-unixTime)>30*24*3600 then 
+		if (timeGetUnixEpoch-unixTime)>100*24*3600 then 
 			debugMsg "Ignoring event " & objItem.LogonId & " with tooo old date " & strTime
 			exit function
 		end if
@@ -94,10 +95,12 @@ Class logonEventClass
 		strDomainName=""
 		dim colList, objUser
 		Set colList = objWmi.ExecQuery("Associators of {Win32_LogonSession.LogonId=" & logonEvent.LogonId & "} Where AssocClass=Win32_LoggedOnUser Role=Dependent" )       
+		on error resume next
 		For Each objUser in colList
 			strUserName = objUser.Name
 			strDomainName = objUser.Domain
 		Next
+		on error goto 0
 		if strUserName="" or strDomainName="" then 
 			debugMsg "Can't find event " & objItem.LogonId & " username "
 			exit function
