@@ -1,12 +1,15 @@
 <job id="Comp_inventory">
 <script language="VBScript" src="../libs/lib_core.vbs" ></script>
 <script language="VBScript" src="../libs/lib_http.vbs" ></script>
-<script language="VBScript" src="../libs/lib_time.vbs" ></script>
+<script language="VBScript" src="../libs/lib_inventory.vbs" ></script>
 <script language="VBScript" src="../libs/lib_displayinfo.vbs" ></script>
 <script language="VBScript" src="../config.priv.vbs" ></script>
 <script language="javascript" runat="server" src="../libs/lib_url.js" ></script>
 <script language="VBScript">
+option explicit
+DEBUGMODE = 0
 'Скрипт сбора данных о конфигурации компа
+'v0.15 * включен option explicit, все функции работы с инвентори вынесены в библиотеку (так также option explicit)
 'v0.14 + Теперь собирается и MAC (Требуется поддержка со стороны БД)
 'v0.13 + Теперь ИД компьютера сохраняется в реестре
 '      * Теперь скрипт требует права админа
@@ -37,12 +40,12 @@
 forceCscript
 
 const scrName="gp_compInventory" : const scrVer="0.14"
-logFile = WorkDir & scrName & ".log"
+dim logFile : logFile = WorkDir & scrName & ".log"
 
 Msg "-" : Msg "Script started: "&scrName&" "&scrVer&" (core "&coreLibVer&")"
 dim objWMIService
 Set objWMIService = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\cimv2")
-
+dim colItems,objItem
 
 'privelegeMe()
 'checkFullAdminRights()
@@ -97,61 +100,6 @@ function ListUsersSoft(byVal HIVE)
 end function
 
 
-'возвращает ID домена по имени или -1 если домен не найден
-function getDomainID(byVal domain)
-	getDomainID=getXmlResponseID(getXMLData(inventory_apihost&"/web/api/domains/"&domain))
-	Msg "Got DomainID="&getDomainID&" from "&inventory_apihost&"/web/api/domains/"&domain	
-end function
-
-'возвращает ID компьютера по домену, имени или -1 если не найден
-function getCompID(byVal domain, byVal name)
-	getCompID=getXmlResponseID(getXMLData(inventory_apihost&"/web/api/comps/"&domain&"/"&name))
-	Msg "Got CompID="&getCompID&" from "&inventory_apihost&"/web/api/comps/"&domain&"/"&name
-end function
-
-'возвращает ID компьютера по ID или -1 если не найден (проверка что ID есть в БД)
-function chkCompID(byVal id)
-	chkCompID=getXmlResponseID(getXMLData(inventory_apihost&"/web/api/comps/"&id))
-	Msg "Got CompID="&getCompID&" from "&inventory_apihost&"/web/api/comps/"&id
-end function
-
-'обновлеят запись компьютера в БД, если в качестве compID передано -1, то создает новую
-'возвращает ID созданной/обновленной записи
-function updRecord(byVal compID, byVal domainID, byVal name, byVal OS, byVal hw, byVal sw, byVal ip, byVal mac)
-	datetime = Replace(timeGetUtcTimestamp,"/","-")
-	data=_
-	"domain_id="&domainID&_
-	"&name="&Url.Encode(name)&_
-	"&os="&Url.Encode(OS)&_
-	"&raw_hw="&Url.Encode(hw)&_
-	"&raw_soft="&Url.Encode(sw)&_
-	"&raw_version="&Url.Encode(scrVer)&_
-	"&ip="&Url.Encode(ip)&_
-	"&mac="&Url.Encode(mac)&_
-	"&updated_at="&Url.Encode(datetime)
-
-	'сохраняем данные в отдельный файлик. На случай если с сервером связаться не удастся
-	writeFile WorkDir & scrName & ".dat", data
-
-	if (compID>-1) then
-		res=putXmlData(inventory_apihost & "/web/api/comps/"&compID,data)
-	else
-		res=postXmlData(inventory_apihost & "/web/api/comps",data)
-	end if
-
-	id = getXmlResponseID(res)
-
-	if (id > -1) then
-		Msg "Got actual compID " & id & "; Database updated"
-	else
-		Msg "ERR: failed send data to database: " & vbCrLf &_
-			"data=" & data & vbCrLf &_
-			"response=" & res
-	end if
-
-	updRecord = id	
-end function
-
 ' получить IP-адрес
 function getIPv4addrs()
 	dim Text 
@@ -187,7 +135,7 @@ function getMACaddrs()
 end function
 
 'заполняем отпечаток софта
-productList=""
+dim productList : productList=""
 ListSoft HKEY_LOCAL_MACHINE, "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\"
 ListSoft HKEY_LOCAL_MACHINE, "SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\"
 ListUsersSoft HKEY_USERS
@@ -196,7 +144,7 @@ msg "Searching hw..."
 on error resume next
 
 'заполняем отпечаток железа
-hwList=""
+dim hwList: hwList=""
 msg "Searching MB..."
 Set colItems = objWMIService.ExecQuery( "Select * from Win32_BaseBoard", , 48 )
 For Each objItem in colItems
@@ -214,7 +162,7 @@ msg "Searching CPU..."
 
 Set colItems = objWMIService.ExecQuery( "Select * from Win32_Processor", , 48 )
 For Each objItem in colItems
-	comma=""
+	dim comma : comma=""
 	if (Len(hwList)>0) then comma= ","
 	hwList = hwList & comma & "{""processor"":{" _
 		& """model"":""" & TrimWithTabs( URL.addslashes(objItem.Name)) & """, " _
@@ -238,7 +186,7 @@ msg "Searching Drives..."
 
 Set colItems = objWMIService.ExecQuery( "Select * from Win32_DiskDrive", , 48 )
 For Each objItem in colItems
-	driveSize=objItem.Size
+	dim driveSize : driveSize=objItem.Size
 	if (isnull(driveSize)) then driveSize=0
 
 	comma=""
@@ -262,34 +210,18 @@ For Each objItem in colItems
 	& "}}"
 Next
 
-' Query video adapter properties
-'Set colItems = objWMIService.ExecQuery( "Select * from Win32_DesktopMonitor", , 48 )
-'For Each objItem in colItems
-'	if (Len(hwList)>0) then hwList=hwList & ","
-'	hwList = hwList & "{""display"":{" _
-'		& """manufacturer"":""" & objItem.MonitorManufacturer & """," _
-'		& """model"":""" & objItem.Caption & """" _
-'	& "}}"
-'Next
-
-' Get Windows serial
-'Set colItems = objWMIService.ExecQuery( "Select * from SoftwareLicensingService", , 48 )
-'For Each objItem in colItems
-'	productList=productList & ",{""publisher"":""Microsoft"", ""name"":""Windows " & objItem.OA3xOriginalProductKeyDescription & """, ""key"":""" & objItem.OA3xOriginalProductKey & """}" '& vbCrLf
-'Next
-
-
-
 msg "Searching Display ..."
 
-monList=GetMonitorInfo
+dim monList : monList=GetMonitorInfo
 if (Len(monList)>0 ) then
 	if (Len(hwList)>0) then hwList=hwList & ","
 	hwList=hwList & monList
 end if
 
+on error goto 0
 
 msg "Searching OS Version ..."
+dim strOS
 Set colItems = objWMIService.ExecQuery( "Select * from Win32_OperatingSystem", , 48 )
 For Each objItem in colItems
 	strOS = objItem.Version&" "&objItem.Caption
@@ -299,18 +231,19 @@ Next
 
 
 msg "Searching IPs ..."
-IPv4addrs=getIPv4addrs()
-MACaddrs=getMACAddrs()
+dim IPv4addrs : IPv4addrs=getIPv4addrs()
+dim MACaddrs : MACaddrs=getMACAddrs()
 
 dim domainID, compID
 
 msg "Searching Domain name..."
-Set colItems = objWMIService.ExecQuery( "Select * from Win32_ComputerSystem", , 48 )
+dim strComputerDomain
+Set colItems = objWMIService.ExecQuery( "Select * from Win32_ComputerSystem" , , 48 )
 For Each objItem in colItems
 	strComputerDomain = split(objItem.Domain,".")(0)
 Next
 
-domainID=getDomainID(strComputerDomain)
+domainID=invGetDomainId(strComputerDomain)
 if (domainID = -1) then
 	Halt "Domain "&strComputerDomain&" not found in inventory database. Please add it manually"
 	'domainID=""
@@ -320,24 +253,34 @@ end if
 msg "Searching OS..."
 
 const regStorage="HKEY_LOCAL_MACHINE\SOFTWARE\Reviakin\Inventory\"
+dim savedCompID
 savedCompID=regRead(regStorage & "compID")
 
+if (Len(savedCompID)>0) then
+	savedCompID=CInt(savedCompID)
+else
+	savedCompId=0
+end if
+
 if (savedCompID > 0) then
-	msg "INFO: saved CompID found. Checking in database..."
-	compID=chkCompID(savedCompID)
+	msg "INFO: saved CompID found ("&savedCompID&"). Checking in database..."
+	compID=invChkCompId(savedCompID)
 else
 	compID=-1
 end if
 
 
-if (compID = false or compID<1) then
-	msg "INFO: no valid saved CompID. Searching in database..."
-	compID=getCompID(strComputerDomain, ComputerName)	
+if (compID > 0) then
+	msg "INFO: got CompID=" & compID
 else
-	msg "INFO: got CompID=" & CompID
+	msg "INFO: no valid saved CompID. Searching in database..."
+	'msg strComputerDomain
+	'msg ComputerName
+	compID=invGetCompId(strComputerDomain, ComputerName)	
+	msg compID
 end if
 
-id = updRecord(compID, domainID, ComputerName, strOS, hwList, productList, IPv4addrs, MACaddrs)
+dim id : id = invUpdateComp(compID, domainID, ComputerName, strOS, hwList, productList, IPv4addrs, MACaddrs)
 
 if (id > -1) then
 	regWrite regStorage & "compID", "REG_SZ", id
@@ -350,7 +293,7 @@ end if
 ** SIG ** hkgBZQMEAgEFADB3BgorBgEEAYI3AgEEoGkwZzAyBgor
 ** SIG ** BgEEAYI3AgEeMCQCAQEEEHAFYRrOONQRoqMAEEvTUJAC
 ** SIG ** AQACAQACAQACAQACAQAwMTANBglghkgBZQMEAgEFAAQg
-** SIG ** VdzwBPUSWRwpP1dLlGG61+ny/6zJ8YUh8wtY72s3LkWg
+** SIG ** B8CXYY+9AmeU/8j4cGuYgUb43GN9tVxi63HDXA2bm4mg
 ** SIG ** ggWcMIIFmDCCA4CgAwIBAgIBAzANBgkqhkiG9w0BAQsF
 ** SIG ** ADBtMQswCQYDVQQGEwJSVTENMAsGA1UECAwEVXJhbDEU
 ** SIG ** MBIGA1UEBwwLQ2hlbHlhYmluc2sxETAPBgNVBAoMCFJl
@@ -401,15 +344,15 @@ end if
 ** SIG ** YWtpbi1yb290LUNBAgEDMA0GCWCGSAFlAwQCAQUAoHww
 ** SIG ** EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwG
 ** SIG ** CisGAQQBgjcCAQQwHAYKKwYBBAGCNwIBCzEOMAwGCisG
-** SIG ** AQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIJFgPqwuFImo
-** SIG ** EhdcsbQQwfmqelQTQ3oNuojyBCjjwDsxMA0GCSqGSIb3
-** SIG ** DQEBAQUABIIBAJ+Zv7qZH2ipE4RioeC6EFKtPFgJHse5
-** SIG ** +ZKEShk82ovsWp5oHx0A8jts+i4GZIDWyhnQev0quNH2
-** SIG ** UNfbBG75UETfEpGvlDpObvNRd/d1+cPGh9F6vJIBZskk
-** SIG ** foCKGXFML0SMpKBMcOT/ZGpq7eCQ173vmcHOvuPI7YEO
-** SIG ** RpBvVxEaLFYBOOFYJGpQNVXzotTdTKX5H9XGkbLhHOBM
-** SIG ** xXbSDhOE3B1efhQys3g70iR5uDebepf8dSUEcxddrEXz
-** SIG ** 4ZdT/ux6YPhRBF4E79irUojmLemDid+AbliIFWbd+s6Z
-** SIG ** fAf/FyVEp45rMQPaq3O1XZyocLCYJnaqyGqziKAeb3bnxfc=
+** SIG ** AQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEID+iiGAnTLyz
+** SIG ** +7geX5HwHUbub6eY7KC5b1g39lCQcM6fMA0GCSqGSIb3
+** SIG ** DQEBAQUABIIBAHmvyFa+JxK8Pd0cIYVeUMJlgbGwF4cK
+** SIG ** 9mlqruyX6VaS/Ri9Kirkb+O04ICuUG0gh4TStEjrMF7H
+** SIG ** z6ankJxSyS+v52+vHiinXaJQHHJQ6IjCidOKOJkoPVSG
+** SIG ** h3v66wGZnpBi9gJYPvX/RygIYfjpoykWdJeiDzy5m+V4
+** SIG ** sOGJj/f4WhUV8kIux/rmp976JPYejOXcvboxWa7A3ylZ
+** SIG ** jMyWg1EpfJyNTPYHWOhGFqWG0wYJjKmOqjWZCBVca85R
+** SIG ** YXtp6xveHX6ykcG05WqmP3cLzPS1su4L4nNUqq9hsTYe
+** SIG ** qx+l+sGrJ1GvwqaTXXe6uwhD0nZnhBOnEoPol4hwk56ohSc=
 </signature>
 </job>
