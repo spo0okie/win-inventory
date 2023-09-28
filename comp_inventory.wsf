@@ -39,7 +39,7 @@ DEBUGMODE = 0
 
 forceCscript
 
-const scrName="gp_compInventory" : const scrVer="0.14"
+const scrName="gp_compInventory" : const scrVer="0.15"
 dim logFile : logFile = WorkDir & scrName & ".log"
 
 Msg "-" : Msg "Script started: "&scrName&" "&scrVer&" (core "&coreLibVer&")"
