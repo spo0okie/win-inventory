@@ -12,6 +12,7 @@ DEBUGMODE=0
 'Работает не так тупо как раньше - просто добавить запись в БД с текущим временем или попытаться через 5 минут.
 'Скрипт определяет время логина пользователя и пытается класть в БД именно набор логин+комп+время
 'и кладет только если такого набора там еще нет
+'v0.9 * обязательная авторизация. работа с новым API со слепым PUSH данных, без чтения (необходим минимальный набор прав)
 'v0.8.5 * WMI запрос завернут в игнор ошибок, чтобы не выбрасывать их пользователю
 'v0.8.4 * Добавлена отладка, удален лишний объект WMI
 'v0.8.3 * Попытка обработать ошибки доступа
@@ -50,7 +51,7 @@ Dim adsinfo, logItems, oShell, strSessionName, vbsTimestamp, strTimestamp, unixT
 
 
 Class logonEventClass
-	dim wmiType,invType, unixTime, strTime, vbsTime, strUserName, strDomainName
+	dim wmiType, invType, unixTime, strTime, vbsTime, strUserName, strDomainName
 	
 	Function setWmiTime(wmiTime)
 		vbsTime = timeWmiToVbs(wmiTime)
@@ -124,30 +125,17 @@ Class logonEventClass
 		dim data, res, updRecord
 		data="comp_name=" & comp & "&user_login=" & strDomainName & "\" & strUserName & "&time=" & unixTime & "&type=" & invType & "&local_time=" & timeGetUnixEpoch
 	
-		Msg "Searchin record id of " & data & " ..."
 		on error resume next
-		res=getXmlData (inventory_apihost & "/web/api/login-journal/search?" & data)
+		res=postAuthXmlData(inventory_apihost & "/web/api/login-journal/push",data,inventory_user,inventory_password)
 		on error goto 0
 		if (getXmlResponseID(res) > -1) then
-			updRecord="ok "& res
-			Msg "Record already set: " & res & "; Database OK"
+			updRecord="ok " & res
+			Msg "Data sent: " & res & "; Database updated"
 		else
-	
-			Msg "Record not found. Creatin new rec..."
-			on error resume next
-			res=postXmlData(inventory_apihost & "/web/api/login-journal",data)
-			on error goto 0
-			if (getXmlResponseID(res) > -1) then
-				updRecord="ok " & res
-				Msg "Data sent: " & res & "; Database updated"
-			else
-				Msg "Error sending data ... retrying in next launch"
-				Msg data
-				Msg res
-			end if
-		
-		end if
-	
+			Msg "Error sending data ... retrying in next launch"
+			Msg data
+			Msg res
+		end if	
 	end function
 
 	
@@ -206,7 +194,7 @@ For Each objItem in objItems
 			if not objLogons.exists(.keyString()) then
 				objLogons.Add .keyString(), logonEvent
 				.varDump
-				.setRecord strComputerDomain & "\" & strComputerName
+				.setRecord strComputerName & "." & strComputerDomain
 			end if
 		end if
 	end with
@@ -222,7 +210,7 @@ wscript.quit
 ** SIG ** hkgBZQMEAgEFADB3BgorBgEEAYI3AgEEoGkwZzAyBgor
 ** SIG ** BgEEAYI3AgEeMCQCAQEEEHAFYRrOONQRoqMAEEvTUJAC
 ** SIG ** AQACAQACAQACAQACAQAwMTANBglghkgBZQMEAgEFAAQg
-** SIG ** 9ywnDTrkCivdJbzUQ6ty15KHxUTRgW9GPH54+aLAwFOg
+** SIG ** ATkoeom1HQfQMVcFa2gpAi5Bxk8/TvOmKyPl9hdxFfSg
 ** SIG ** ggWcMIIFmDCCA4CgAwIBAgIBAzANBgkqhkiG9w0BAQsF
 ** SIG ** ADBtMQswCQYDVQQGEwJSVTENMAsGA1UECAwEVXJhbDEU
 ** SIG ** MBIGA1UEBwwLQ2hlbHlhYmluc2sxETAPBgNVBAoMCFJl
@@ -273,15 +261,15 @@ wscript.quit
 ** SIG ** YWtpbi1yb290LUNBAgEDMA0GCWCGSAFlAwQCAQUAoHww
 ** SIG ** EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwG
 ** SIG ** CisGAQQBgjcCAQQwHAYKKwYBBAGCNwIBCzEOMAwGCisG
-** SIG ** AQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIEFtX+tXyLF0
-** SIG ** 4pnxmUAG7V0YGLH9Q0WIPDCIExcP2ZORMA0GCSqGSIb3
-** SIG ** DQEBAQUABIIBABH09Ky9ngz6HROa1xgjSXYDi11yS1At
-** SIG ** arMP+Sg9p82BVznqqdZ9p56WnUjrKoP6akk+IIcr6VD9
-** SIG ** VR64D12m9CEcnARix8pmKhuZLahmwvwWH9LlWHA8bwdA
-** SIG ** 5qwi9PgGXCzTOqYpwPSajbqAr7DPY6yL9WtHa0oNalYV
-** SIG ** 91Da/9yUu853Uix42a5mnIL8NDod67hVzjqLNrt71FnG
-** SIG ** QFv/yx50fYnrQkFIQMmDpJaG+rhBJl6MO1ITcNhFGOEf
-** SIG ** r8ihlpaqOnHogSh4BIv1g3fPvyK/S7QBq8hwXdIi99Gi
-** SIG ** tSdWdA3jieGJMxFNPoBWgCvmRMbhOdwn8zbUnu+RZ5Pnh5c=
+** SIG ** AQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIAV+psGyP70E
+** SIG ** 3YpTCfKRI471zIR9LgBMUHfy0N4GuSAuMA0GCSqGSIb3
+** SIG ** DQEBAQUABIIBADN7GOzN7LJAUMBFZJiTh1KT3RTa2e7U
+** SIG ** Mp70lEmvDXymVsYKgOjXJivjQ2434LNaKzzaSC5xBofF
+** SIG ** pbaukdPelYZ+eJd/NQlQDWy2V+aKHYwTLvshwVfP3wBh
+** SIG ** 4XCMrBsGES1vk+RGvN9mDvPCsGCMDwAMvRApHn2jO7Qk
+** SIG ** K61LZqZyjV0pV+v41ukA6Fcp4O3VT7Tw+ySY15831BzV
+** SIG ** 3TSTmlOGia6Fn0M5qEeJpGTMRHRN80jKwtUqy+rBe3Qe
+** SIG ** vZnbMODGxe5SVP5+6bcS5bI4msxwdy4Jr3Shml2Lhj5C
+** SIG ** ASpEhou/WCWG5ldyKF5bNA6hvzvUnqKXee+dAEMWLaySdxE=
 </signature>
 </job>

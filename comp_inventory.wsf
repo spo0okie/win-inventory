@@ -9,6 +9,7 @@
 option explicit
 DEBUGMODE = 0
 'Скрипт сбора данных о конфигурации компа
+'v0.16 * работа с новым API с обязательной авторизайие, слепым PUSH данных, без чтения вообще с минимальным набором прав
 'v0.15 * включен option explicit, все функции работы с инвентори вынесены в библиотеку (так также option explicit)
 'v0.14 + Теперь собирается и MAC (Требуется поддержка со стороны БД)
 'v0.13 + Теперь ИД компьютера сохраняется в реестре
@@ -106,7 +107,7 @@ function getIPv4addrs()
 	Text = ""
 	on error resume next
 	dim IPConfigSet: Set IPConfigSet = objWMIService.ExecQuery("Select IPAddress from Win32_NetworkAdapterConfiguration where ipenabled = true")
-	dim IPConfig 
+	dim IPConfig,i 
 	for each IPConfig in IPConfigSet
     	if Not IsNull(IPConfig.IPAddress) then 
         	for i=LBound(IPConfig.IPAddress) to UBound(IPConfig.IPAddress)
@@ -124,7 +125,7 @@ function getMACaddrs()
 	Text = ""
 	on error resume next
 	dim IPConfigSet: Set IPConfigSet = objWMIService.ExecQuery("Select MACAddress from Win32_NetworkAdapterConfiguration where ipenabled = true")
-	dim IPConfig 
+	dim IPConfig,i
 	for each IPConfig in IPConfigSet
 		if Not IsNull(IPConfig.MACAddress) then 
 	    	Text = Text & IPConfig.MACAddress(i)& VbCrLf
@@ -229,7 +230,6 @@ For Each objItem in colItems
 	productList=productList & "{""publisher"":""Microsoft"", ""name"":""" & URL.addslashes(objItem.Caption) & """}" '& vbCrLf
 Next
 
-
 msg "Searching IPs ..."
 dim IPv4addrs : IPv4addrs=getIPv4addrs()
 dim MACaddrs : MACaddrs=getMACAddrs()
@@ -240,50 +240,13 @@ msg "Searching Domain name..."
 dim strComputerDomain
 Set colItems = objWMIService.ExecQuery( "Select * from Win32_ComputerSystem" , , 48 )
 For Each objItem in colItems
-	strComputerDomain = split(objItem.Domain,".")(0)
+	strComputerDomain = objItem.Domain
 Next
 
-domainID=invGetDomainId(strComputerDomain)
-if (domainID = -1) then
-	Halt "Domain "&strComputerDomain&" not found in inventory database. Please add it manually"
-	'domainID=""
-	'wscript.quit
-end if
-
-msg "Searching OS..."
-
-const regStorage="HKEY_LOCAL_MACHINE\SOFTWARE\Reviakin\Inventory\"
-dim savedCompID
-savedCompID=regRead(regStorage & "compID")
-
-if (Len(savedCompID)>0) then
-	savedCompID=CInt(savedCompID)
-else
-	savedCompId=0
-end if
-
-if (savedCompID > 0) then
-	msg "INFO: saved CompID found ("&savedCompID&"). Checking in database..."
-	compID=invChkCompId(savedCompID)
-else
-	compID=-1
-end if
-
-
-if (compID > 0) then
-	msg "INFO: got CompID=" & compID
-else
-	msg "INFO: no valid saved CompID. Searching in database..."
-	'msg strComputerDomain
-	'msg ComputerName
-	compID=invGetCompId(strComputerDomain, ComputerName)	
-	msg compID
-end if
-
-dim id : id = invUpdateComp(compID, domainID, ComputerName, strOS, hwList, productList, IPv4addrs, MACaddrs)
+dim id : id = invPushComp(ComputerName & "." & strComputerDomain, strOS, hwList, productList, IPv4addrs, MACaddrs)
 
 if (id > -1) then
-	regWrite regStorage & "compID", "REG_SZ", id
+	regWrite inventoryCompIDRegStorage, "REG_SZ", id
 end if
 
 </script>
@@ -293,7 +256,7 @@ end if
 ** SIG ** hkgBZQMEAgEFADB3BgorBgEEAYI3AgEEoGkwZzAyBgor
 ** SIG ** BgEEAYI3AgEeMCQCAQEEEHAFYRrOONQRoqMAEEvTUJAC
 ** SIG ** AQACAQACAQACAQACAQAwMTANBglghkgBZQMEAgEFAAQg
-** SIG ** B8CXYY+9AmeU/8j4cGuYgUb43GN9tVxi63HDXA2bm4mg
+** SIG ** nti4XBsi/V46fItVjqkFpSdAmPFtuGtMc//iVmCa/p6g
 ** SIG ** ggWcMIIFmDCCA4CgAwIBAgIBAzANBgkqhkiG9w0BAQsF
 ** SIG ** ADBtMQswCQYDVQQGEwJSVTENMAsGA1UECAwEVXJhbDEU
 ** SIG ** MBIGA1UEBwwLQ2hlbHlhYmluc2sxETAPBgNVBAoMCFJl
@@ -344,15 +307,15 @@ end if
 ** SIG ** YWtpbi1yb290LUNBAgEDMA0GCWCGSAFlAwQCAQUAoHww
 ** SIG ** EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwG
 ** SIG ** CisGAQQBgjcCAQQwHAYKKwYBBAGCNwIBCzEOMAwGCisG
-** SIG ** AQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEID+iiGAnTLyz
-** SIG ** +7geX5HwHUbub6eY7KC5b1g39lCQcM6fMA0GCSqGSIb3
-** SIG ** DQEBAQUABIIBAHmvyFa+JxK8Pd0cIYVeUMJlgbGwF4cK
-** SIG ** 9mlqruyX6VaS/Ri9Kirkb+O04ICuUG0gh4TStEjrMF7H
-** SIG ** z6ankJxSyS+v52+vHiinXaJQHHJQ6IjCidOKOJkoPVSG
-** SIG ** h3v66wGZnpBi9gJYPvX/RygIYfjpoykWdJeiDzy5m+V4
-** SIG ** sOGJj/f4WhUV8kIux/rmp976JPYejOXcvboxWa7A3ylZ
-** SIG ** jMyWg1EpfJyNTPYHWOhGFqWG0wYJjKmOqjWZCBVca85R
-** SIG ** YXtp6xveHX6ykcG05WqmP3cLzPS1su4L4nNUqq9hsTYe
-** SIG ** qx+l+sGrJ1GvwqaTXXe6uwhD0nZnhBOnEoPol4hwk56ohSc=
+** SIG ** AQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIIsL6AS6j+Rv
+** SIG ** mh92AjkUCFxi0hREQ80UZ/pw4KBDoeZrMA0GCSqGSIb3
+** SIG ** DQEBAQUABIIBACzgA2Okw6GPIwURYSzuk7y/E2rzeW9c
+** SIG ** wkWpDZViJBcqO4E1brJs2V8TmHnapdZasJMCxPQWpX1a
+** SIG ** kznE5bbsJLflrtvQGjB39Wtu8+Mgpm3h3IiArKkCMQQB
+** SIG ** nZnEVI4eMwhwQP22+xOPUpU3x9DGGnClNRJMEkALeuhI
+** SIG ** K2EPEBQ0/+cVlxNAxYhzGj+N6Kgk4z22zeKwokWXRICc
+** SIG ** 8E2SXlaw9rKLrWleK8cVugd6HM/F3p6k/bvhLmKxm+8b
+** SIG ** elBT2aGzbX4BoNBbHpM5W3liedqcpLcqyz8Uin/d0pod
+** SIG ** sFUh3NH1+j5NaMALUax4yW44t/Abok/hgQYcapeW/GLezNk=
 </signature>
 </job>

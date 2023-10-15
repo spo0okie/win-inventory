@@ -1,47 +1,26 @@
 <job id="Comp_inventory_async">
 <script language="VBScript" src="../libs/lib_core.vbs" ></script>
 <script language="VBScript" src="../libs/lib_http.vbs" ></script>
-<script language="VBScript" src="../libs/lib_displayinfo.vbs" ></script>
+<script language="VBScript" src="../libs/lib_inventory.vbs" ></script>
 <script language="VBScript" src="../config.priv.vbs" ></script>
 <script language="javascript" runat="server" src="../libs/lib_url.js" ></script>
 <script language="VBScript">
 'Скрипт асинхронной отправки данных собранных на другой машине (при отсутствии доступа на исходной машине к инвентаризации)
 
 compName=WScript.Arguments(0)
-compDomain="AZIMUTH"
-inventory_apihost = "inventory.azimuth.holding.local"
 
 const scrName="comp_Inventory_asyncPush" : const scrVer="0.1"
 logFile = WorkDir & scrName & ".log"
 Msg "-" : Msg "Script started: "&scrName&" "&scrVer
 
-
-'возвращает ID компьютера по домену, имени или -1 если не найден
-function getCompID(byVal domain, byVal name)
-	getCompID=getResponseID(getXMLData(inventory_apihost&"/web/api/comps/"&domain&"/"&name))
-	Msg "Got CompID="&getCompID&" from "&inventory_apihost&"/web/api/comps/"&domain&"/"&name
-end function
-
-dataFile="\\" & compname & "\c$\Windows\Temp\gp_compInventory.dat"
+dataFile=WScript.Arguments(0)
 if (objFSO.fileExists (dataFile)) then
 	data = getFile (dataFile)
 else
 	Halt "inventory data not found in " & dataFile & "!"
 end if
 
-compID=getCompID(compDomain, compName)
-
-if (compID>-1) then
-	res=putData(inventory_apihost&"/web/api/comps/"&compID,data)
-else
-	res=postData(inventory_apihost&"/web/api/comps",data)
-end if
-
-if (getXmlResponseID(res) > -1) then
-	Msg "ERR: failed send data to database: "&res
-elseif (compID>=0) then
-	Msg "Got actual compID "&res&"; Database updated"
-end if
+invSendCompData(data)
 
 </script>
 
@@ -50,7 +29,7 @@ end if
 ** SIG ** hkgBZQMEAgEFADB3BgorBgEEAYI3AgEEoGkwZzAyBgor
 ** SIG ** BgEEAYI3AgEeMCQCAQEEEHAFYRrOONQRoqMAEEvTUJAC
 ** SIG ** AQACAQACAQACAQACAQAwMTANBglghkgBZQMEAgEFAAQg
-** SIG ** /deBAaKgOAG0bf0uWEkRRkGGUVvczwJs8fop98JFvY6g
+** SIG ** jOvrQkgbU9oLjX5LrXZsJqGZfVbBxBR9o80RTWVd/r2g
 ** SIG ** ggWcMIIFmDCCA4CgAwIBAgIBAzANBgkqhkiG9w0BAQsF
 ** SIG ** ADBtMQswCQYDVQQGEwJSVTENMAsGA1UECAwEVXJhbDEU
 ** SIG ** MBIGA1UEBwwLQ2hlbHlhYmluc2sxETAPBgNVBAoMCFJl
@@ -101,15 +80,15 @@ end if
 ** SIG ** YWtpbi1yb290LUNBAgEDMA0GCWCGSAFlAwQCAQUAoHww
 ** SIG ** EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwG
 ** SIG ** CisGAQQBgjcCAQQwHAYKKwYBBAGCNwIBCzEOMAwGCisG
-** SIG ** AQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIJ5zmPQVVxi4
-** SIG ** 3NMJrEsewyXNyLa1m2X1QuzUALL+sq6hMA0GCSqGSIb3
-** SIG ** DQEBAQUABIIBAIDZJFzt0cmdVXt+lHkSfCRlq2a6MuuZ
-** SIG ** dhZ31QVCtG0wRWc3QkJ1iyOpXapOqSC0prOITekRQb1c
-** SIG ** d2ypAVOnwz0fN209A8CV49Qi8ccKk3LDxcP5lU902vbE
-** SIG ** 5LrJ9CF3zh9hxfXVFWqxj7iQUf93NfUiLYSYWK865rZI
-** SIG ** ao/KVvvn6QlOwLZ1nf0+YKQTwQzDOBHf28HVvxy2w4eQ
-** SIG ** NWbaPYu+tcGxT/zwOtz9ZbGax57gNg7uE9GDA0AutRyJ
-** SIG ** Yk0XevKwyYd1gHHRu0KSn2guApClkamUNgfYIc6bNn/9
-** SIG ** qE9HRWVuSNAbDVkw3JgOx8L4PbFxeTc7w8YEyybx2ZlMDps=
+** SIG ** AQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEICexPdngwL/F
+** SIG ** zHZS4Q3l3cLYjLffGL61JvKKeXuOricAMA0GCSqGSIb3
+** SIG ** DQEBAQUABIIBADNbYIyXqJCYv9TqzcgQxt+e4sAcHccX
+** SIG ** q/J+18qT75UMmdCmh5RErgzyUOKCq1wAO91KpeIt5QjT
+** SIG ** BnI6D3poroPgQ4oDyRvGpj36bM6oiO+dGZhoL0qMm2Ed
+** SIG ** W9tQr4AtLr4LsmA7VfLDzKcX8U4WxJLtW0Fd69PDhBH6
+** SIG ** 6sT0y6s9wmAaExIONbMJR79Zod1PIiUVQdBAfoO+sGVa
+** SIG ** N6pVMxkcXYOlcHEaI26pCi5kFWQFOEPectTuxvRiJRq7
+** SIG ** 7Ge4Tj39gogCnkvAchdgBTlHGJP4Cah0JXN/Rjwulu/V
+** SIG ** V1PmwjUKYds5Ey2IUxGgVaMr8fLhdLKHgJBnBfINl8P0tT4=
 </signature>
 </job>
