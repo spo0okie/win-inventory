@@ -238,10 +238,12 @@ dim domainID, compID
 
 msg "Searching Domain name..."
 dim strComputerDomain
+on error resume next
 Set colItems = objWMIService.ExecQuery( "Select * from Win32_ComputerSystem" , , 48 )
 For Each objItem in colItems
 	strComputerDomain = objItem.Domain
 Next
+on error goto 0
 
 dim id : id = invPushComp(ComputerName & "." & strComputerDomain, strOS, hwList, productList, IPv4addrs, MACaddrs)
 
