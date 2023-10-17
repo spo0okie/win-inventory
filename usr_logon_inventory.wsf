@@ -30,7 +30,7 @@ DEBUGMODE=0
 'v0.3 	- вынесено в отдельный скрипт относительно скрипта логона, для запуска по шедулеру в любое время
 'v0.2 	- переведено на WSH для подключения библиотек и ведения лога
 'unPrivelegeMe
-const scrName="gp_logonInventory" : const scrVer="0.8.5"
+const scrName="gp_logonInventory" : const scrVer="0.9"
 Dim adsinfo, logItems, oShell, strSessionName, vbsTimestamp, strTimestamp, unixTimestamp
 
 
@@ -210,7 +210,7 @@ wscript.quit
 ** SIG ** hkgBZQMEAgEFADB3BgorBgEEAYI3AgEEoGkwZzAyBgor
 ** SIG ** BgEEAYI3AgEeMCQCAQEEEHAFYRrOONQRoqMAEEvTUJAC
 ** SIG ** AQACAQACAQACAQACAQAwMTANBglghkgBZQMEAgEFAAQg
-** SIG ** ATkoeom1HQfQMVcFa2gpAi5Bxk8/TvOmKyPl9hdxFfSg
+** SIG ** 8Z3XdBe6cgC7a+EC0BgURFYor2DmIxTmEBi2g1dyLrSg
 ** SIG ** ggWcMIIFmDCCA4CgAwIBAgIBAzANBgkqhkiG9w0BAQsF
 ** SIG ** ADBtMQswCQYDVQQGEwJSVTENMAsGA1UECAwEVXJhbDEU
 ** SIG ** MBIGA1UEBwwLQ2hlbHlhYmluc2sxETAPBgNVBAoMCFJl
@@ -261,15 +261,15 @@ wscript.quit
 ** SIG ** YWtpbi1yb290LUNBAgEDMA0GCWCGSAFlAwQCAQUAoHww
 ** SIG ** EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwG
 ** SIG ** CisGAQQBgjcCAQQwHAYKKwYBBAGCNwIBCzEOMAwGCisG
-** SIG ** AQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIAV+psGyP70E
-** SIG ** 3YpTCfKRI471zIR9LgBMUHfy0N4GuSAuMA0GCSqGSIb3
-** SIG ** DQEBAQUABIIBADN7GOzN7LJAUMBFZJiTh1KT3RTa2e7U
-** SIG ** Mp70lEmvDXymVsYKgOjXJivjQ2434LNaKzzaSC5xBofF
-** SIG ** pbaukdPelYZ+eJd/NQlQDWy2V+aKHYwTLvshwVfP3wBh
-** SIG ** 4XCMrBsGES1vk+RGvN9mDvPCsGCMDwAMvRApHn2jO7Qk
-** SIG ** K61LZqZyjV0pV+v41ukA6Fcp4O3VT7Tw+ySY15831BzV
-** SIG ** 3TSTmlOGia6Fn0M5qEeJpGTMRHRN80jKwtUqy+rBe3Qe
-** SIG ** vZnbMODGxe5SVP5+6bcS5bI4msxwdy4Jr3Shml2Lhj5C
-** SIG ** ASpEhou/WCWG5ldyKF5bNA6hvzvUnqKXee+dAEMWLaySdxE=
+** SIG ** AQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIPelz9Fusm+T
+** SIG ** M0dx0uf+2uL0TDkKJ1JBgSNBQ04yOWeUMA0GCSqGSIb3
+** SIG ** DQEBAQUABIIBABacRTHhfdORnXYqiVZANmU6daiNOIxK
+** SIG ** VcWNn9brnevm/XDVFoFJpCtIyd1HXuIp+RW6XKRxmgWq
+** SIG ** E1MHdrMMR9e/xs08iLcHW4i9Sp1t7QkgpGCtzrgBOCD+
+** SIG ** AAo51v2p3F+tu1qDYU03px2UK3ASlSESAr7Qv9tDOrWn
+** SIG ** 8b/PSS14yru63OQQcZ9Dx7346y00bSIE4ggPtEXurUKc
+** SIG ** hD8uPiMCxtONtWs2/St0cjGVxUGMF2AUKKZ+mwWO6iiR
+** SIG ** 39DjNjwnEyhiSULqlhDWSHT94D1EgOM4ItoJaNlzs7kh
+** SIG ** vjE8gjlu+QHci8yDrAmGEVsQvBL3qcRE3EMU6ZPxpnKvULo=
 </signature>
 </job>

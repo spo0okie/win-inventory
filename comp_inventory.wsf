@@ -8,39 +8,39 @@
 <script language="VBScript">
 option explicit
 DEBUGMODE = 0
-'Скрипт сбора данных о конфигурации компа
-'v0.16 * работа с новым API с обязательной авторизайие, слепым PUSH данных, без чтения вообще с минимальным набором прав
-'v0.15 * включен option explicit, все функции работы с инвентори вынесены в библиотеку (так также option explicit)
-'v0.14 + Теперь собирается и MAC (Требуется поддержка со стороны БД)
-'v0.13 + Теперь ИД компьютера сохраняется в реестре
-'      * Теперь скрипт требует права админа
-'v0.12 * Имя компютера теперь берется полное (а не NETBIOS)
-'v0.11 * функцонинал XML парсинга и HTTP REST вынесен в lib_http, URL.encdode/decode -> lib_url
-'v0.10rc2 ! Все обращения к WMI теперь идут с отключением выброса ошибок и рассчитаны на возможность сбоя запроса
-'v0.10rc + Сохранение IP адреса(ов)
-'v0.9.1 ! ПО считалось системной компонентой только по наличию параметра SystemComponent, независимо от значения
-'v0.9  * Домен теперь не обязательное поле, что позволит отработать скрипту на недоменных машинах
-'v0.8  ! Исправлено кодирование в формат JSON
-'v0.7  * Операционная система теперь входит в список ПО,
-'v0.6  ! значение объема видеокарты теперь текстовое,
-'v0.5  ! исправлена ошибка с преобразованием пустого значения объема видеокарты в 0 на Windows XP,
-'	 которая приводила к вылетанию скрипта.
-'v0.4  * софт ищется еще из ветки WOW6432node
-'	 софт с пометкой "системная компонента" не выводится в отчет
-'	 если у софта есть метка "родительский продукт" то он в отчет выводится
-'	 как родительский продукт, чтобы нам в БД не заталкивать все субкомпоненты вручную
-'v0.3  + отправка данных скорректирована для соответствия JSON формату
-'v0.2  * отправка новых и обновление уже имеющихся данных через API POST/PUT
-'	 в принципе уже рабочий скрипт и может наполнять БД
-'v0.1  + добавлена отправка данных в БД!
-'v0.02 + сбор данных о железе: мать, проц, планки оперативки, диски, видео
-'v0.01 * initial: сбор данных о софте из wmi product get name и веток реестра Uninstall
-'	т.к. wmi отдает инфу только по продуктам установленным через MSI
-'	отправки данных пока нет. только сбор
+'РЎРєСЂРёРїС‚ СЃР±РѕСЂР° РґР°РЅРЅС‹С… Рѕ РєРѕРЅС„РёРіСѓСЂР°С†РёРё РєРѕРјРїР°
+'v0.16 * СЂР°Р±РѕС‚Р° СЃ РЅРѕРІС‹Рј API СЃ РѕР±СЏР·Р°С‚РµР»СЊРЅРѕР№ Р°РІС‚РѕСЂРёР·Р°Р№РёРµ, СЃР»РµРїС‹Рј PUSH РґР°РЅРЅС‹С…, Р±РµР· С‡С‚РµРЅРёСЏ РІРѕРѕР±С‰Рµ СЃ РјРёРЅРёРјР°Р»СЊРЅС‹Рј РЅР°Р±РѕСЂРѕРј РїСЂР°РІ
+'v0.15 * РІРєР»СЋС‡РµРЅ option explicit, РІСЃРµ С„СѓРЅРєС†РёРё СЂР°Р±РѕС‚С‹ СЃ РёРЅРІРµРЅС‚РѕСЂРё РІС‹РЅРµСЃРµРЅС‹ РІ Р±РёР±Р»РёРѕС‚РµРєСѓ (С‚Р°Рє С‚Р°РєР¶Рµ option explicit)
+'v0.14 + РўРµРїРµСЂСЊ СЃРѕР±РёСЂР°РµС‚СЃСЏ Рё MAC (РўСЂРµР±СѓРµС‚СЃСЏ РїРѕРґРґРµСЂР¶РєР° СЃРѕ СЃС‚РѕСЂРѕРЅС‹ Р‘Р”)
+'v0.13 + РўРµРїРµСЂСЊ РР” РєРѕРјРїСЊСЋС‚РµСЂР° СЃРѕС…СЂР°РЅСЏРµС‚СЃСЏ РІ СЂРµРµСЃС‚СЂРµ
+'      * РўРµРїРµСЂСЊ СЃРєСЂРёРїС‚ С‚СЂРµР±СѓРµС‚ РїСЂР°РІР° Р°РґРјРёРЅР°
+'v0.12 * РРјСЏ РєРѕРјРїСЋС‚РµСЂР° С‚РµРїРµСЂСЊ Р±РµСЂРµС‚СЃСЏ РїРѕР»РЅРѕРµ (Р° РЅРµ NETBIOS)
+'v0.11 * С„СѓРЅРєС†РѕРЅРёРЅР°Р» XML РїР°СЂСЃРёРЅРіР° Рё HTTP REST РІС‹РЅРµСЃРµРЅ РІ lib_http, URL.encdode/decode -> lib_url
+'v0.10rc2 ! Р’СЃРµ РѕР±СЂР°С‰РµРЅРёСЏ Рє WMI С‚РµРїРµСЂСЊ РёРґСѓС‚ СЃ РѕС‚РєР»СЋС‡РµРЅРёРµРј РІС‹Р±СЂРѕСЃР° РѕС€РёР±РѕРє Рё СЂР°СЃСЃС‡РёС‚Р°РЅС‹ РЅР° РІРѕР·РјРѕР¶РЅРѕСЃС‚СЊ СЃР±РѕСЏ Р·Р°РїСЂРѕСЃР°
+'v0.10rc + РЎРѕС…СЂР°РЅРµРЅРёРµ IP Р°РґСЂРµСЃР°(РѕРІ)
+'v0.9.1 ! РџРћ СЃС‡РёС‚Р°Р»РѕСЃСЊ СЃРёСЃС‚РµРјРЅРѕР№ РєРѕРјРїРѕРЅРµРЅС‚РѕР№ С‚РѕР»СЊРєРѕ РїРѕ РЅР°Р»РёС‡РёСЋ РїР°СЂР°РјРµС‚СЂР° SystemComponent, РЅРµР·Р°РІРёСЃРёРјРѕ РѕС‚ Р·РЅР°С‡РµРЅРёСЏ
+'v0.9  * Р”РѕРјРµРЅ С‚РµРїРµСЂСЊ РЅРµ РѕР±СЏР·Р°С‚РµР»СЊРЅРѕРµ РїРѕР»Рµ, С‡С‚Рѕ РїРѕР·РІРѕР»РёС‚ РѕС‚СЂР°Р±РѕС‚Р°С‚СЊ СЃРєСЂРёРїС‚Сѓ РЅР° РЅРµРґРѕРјРµРЅРЅС‹С… РјР°С€РёРЅР°С…
+'v0.8  ! РСЃРїСЂР°РІР»РµРЅРѕ РєРѕРґРёСЂРѕРІР°РЅРёРµ РІ С„РѕСЂРјР°С‚ JSON
+'v0.7  * РћРїРµСЂР°С†РёРѕРЅРЅР°СЏ СЃРёСЃС‚РµРјР° С‚РµРїРµСЂСЊ РІС…РѕРґРёС‚ РІ СЃРїРёСЃРѕРє РџРћ,
+'v0.6  ! Р·РЅР°С‡РµРЅРёРµ РѕР±СЉРµРјР° РІРёРґРµРѕРєР°СЂС‚С‹ С‚РµРїРµСЂСЊ С‚РµРєСЃС‚РѕРІРѕРµ,
+'v0.5  ! РёСЃРїСЂР°РІР»РµРЅР° РѕС€РёР±РєР° СЃ РїСЂРµРѕР±СЂР°Р·РѕРІР°РЅРёРµРј РїСѓСЃС‚РѕРіРѕ Р·РЅР°С‡РµРЅРёСЏ РѕР±СЉРµРјР° РІРёРґРµРѕРєР°СЂС‚С‹ РІ 0 РЅР° Windows XP,
+'	 РєРѕС‚РѕСЂР°СЏ РїСЂРёРІРѕРґРёР»Р° Рє РІС‹Р»РµС‚Р°РЅРёСЋ СЃРєСЂРёРїС‚Р°.
+'v0.4  * СЃРѕС„С‚ РёС‰РµС‚СЃСЏ РµС‰Рµ РёР· РІРµС‚РєРё WOW6432node
+'	 СЃРѕС„С‚ СЃ РїРѕРјРµС‚РєРѕР№ "СЃРёСЃС‚РµРјРЅР°СЏ РєРѕРјРїРѕРЅРµРЅС‚Р°" РЅРµ РІС‹РІРѕРґРёС‚СЃСЏ РІ РѕС‚С‡РµС‚
+'	 РµСЃР»Рё Сѓ СЃРѕС„С‚Р° РµСЃС‚СЊ РјРµС‚РєР° "СЂРѕРґРёС‚РµР»СЊСЃРєРёР№ РїСЂРѕРґСѓРєС‚" С‚Рѕ РѕРЅ РІ РѕС‚С‡РµС‚ РІС‹РІРѕРґРёС‚СЃСЏ
+'	 РєР°Рє СЂРѕРґРёС‚РµР»СЊСЃРєРёР№ РїСЂРѕРґСѓРєС‚, С‡С‚РѕР±С‹ РЅР°Рј РІ Р‘Р” РЅРµ Р·Р°С‚Р°Р»РєРёРІР°С‚СЊ РІСЃРµ СЃСѓР±РєРѕРјРїРѕРЅРµРЅС‚С‹ РІСЂСѓС‡РЅСѓСЋ
+'v0.3  + РѕС‚РїСЂР°РІРєР° РґР°РЅРЅС‹С… СЃРєРѕСЂСЂРµРєС‚РёСЂРѕРІР°РЅР° РґР»СЏ СЃРѕРѕС‚РІРµС‚СЃС‚РІРёСЏ JSON С„РѕСЂРјР°С‚Сѓ
+'v0.2  * РѕС‚РїСЂР°РІРєР° РЅРѕРІС‹С… Рё РѕР±РЅРѕРІР»РµРЅРёРµ СѓР¶Рµ РёРјРµСЋС‰РёС…СЃСЏ РґР°РЅРЅС‹С… С‡РµСЂРµР· API POST/PUT
+'	 РІ РїСЂРёРЅС†РёРїРµ СѓР¶Рµ СЂР°Р±РѕС‡РёР№ СЃРєСЂРёРїС‚ Рё РјРѕР¶РµС‚ РЅР°РїРѕР»РЅСЏС‚СЊ Р‘Р”
+'v0.1  + РґРѕР±Р°РІР»РµРЅР° РѕС‚РїСЂР°РІРєР° РґР°РЅРЅС‹С… РІ Р‘Р”!
+'v0.02 + СЃР±РѕСЂ РґР°РЅРЅС‹С… Рѕ Р¶РµР»РµР·Рµ: РјР°С‚СЊ, РїСЂРѕС†, РїР»Р°РЅРєРё РѕРїРµСЂР°С‚РёРІРєРё, РґРёСЃРєРё, РІРёРґРµРѕ
+'v0.01 * initial: СЃР±РѕСЂ РґР°РЅРЅС‹С… Рѕ СЃРѕС„С‚Рµ РёР· wmi product get name Рё РІРµС‚РѕРє СЂРµРµСЃС‚СЂР° Uninstall
+'	С‚.Рє. wmi РѕС‚РґР°РµС‚ РёРЅС„Сѓ С‚РѕР»СЊРєРѕ РїРѕ РїСЂРѕРґСѓРєС‚Р°Рј СѓСЃС‚Р°РЅРѕРІР»РµРЅРЅС‹Рј С‡РµСЂРµР· MSI
+'	РѕС‚РїСЂР°РІРєРё РґР°РЅРЅС‹С… РїРѕРєР° РЅРµС‚. С‚РѕР»СЊРєРѕ СЃР±РѕСЂ
 
 forceCscript
 
-const scrName="gp_compInventory" : const scrVer="0.15"
+const scrName="gp_compInventory" : const scrVer="0.16"
 dim logFile : logFile = WorkDir & scrName & ".log"
 
 Msg "-" : Msg "Script started: "&scrName&" "&scrVer&" (core "&coreLibVer&")"
@@ -52,11 +52,11 @@ dim colItems,objItem
 'checkFullAdminRights()
 
 
-'поиск установленного софта в папке UNINSTALL в реестре - перебираем подпапки и ищем в них ProductName
+'РїРѕРёСЃРє СѓСЃС‚Р°РЅРѕРІР»РµРЅРЅРѕРіРѕ СЃРѕС„С‚Р° РІ РїР°РїРєРµ UNINSTALL РІ СЂРµРµСЃС‚СЂРµ - РїРµСЂРµР±РёСЂР°РµРј РїРѕРґРїР°РїРєРё Рё РёС‰РµРј РІ РЅРёС… ProductName
 function ListSoft(byVal HIVE, byVal path)
 	dim arrSubKeys, subkey, Publisher, ProductName, ParentProduct, SystemFlag
 	Msg "Searching soft in " & path & "..."
-	'сначала перебираем подпапки
+	'СЃРЅР°С‡Р°Р»Р° РїРµСЂРµР±РёСЂР°РµРј РїРѕРґРїР°РїРєРё
 	objReg.EnumKey HIVE, path, arrSubKeys
 	If Not IsNull(arrSubKeys) Then
 		For Each subkey In arrSubKeys
@@ -70,10 +70,10 @@ function ListSoft(byVal HIVE, byVal path)
 			objReg.GetStringValue HIVE, path & "\" & subkey, "ParentDisplayName", ParentProduct
 			objReg.GetDWORDValue HIVE, path & "\" & subkey, "SystemComponent", SystemFlag
 			'on error goto 0
-			if (SystemFlag = "1") then 'пропускаем системные компоненты
+			if (SystemFlag = "1") then 'РїСЂРѕРїСѓСЃРєР°РµРј СЃРёСЃС‚РµРјРЅС‹Рµ РєРѕРјРїРѕРЅРµРЅС‚С‹
 				Msg "System component found: "& subkey & " " & Publisher & " " & ProductName
 			else 
-				'если у нас есть родительский продукт, то мы его и впишем, на не интересно мелочиться разглядывая компоненты
+				'РµСЃР»Рё Сѓ РЅР°СЃ РµСЃС‚СЊ СЂРѕРґРёС‚РµР»СЊСЃРєРёР№ РїСЂРѕРґСѓРєС‚, С‚Рѕ РјС‹ РµРіРѕ Рё РІРїРёС€РµРј, РЅР° РЅРµ РёРЅС‚РµСЂРµСЃРЅРѕ РјРµР»РѕС‡РёС‚СЊСЃСЏ СЂР°Р·РіР»СЏРґС‹РІР°СЏ РєРѕРјРїРѕРЅРµРЅС‚С‹
 				if (not ParentProduct = "") then ProductName = ParentProduct
 				if (not ProductName = "") then
 					Msg "Soft found: "& subkey & " " & Publisher & " " & ProductName
@@ -85,11 +85,11 @@ function ListSoft(byVal HIVE, byVal path)
 	End If
 end function
 
-'Ищем UNINSTALL софт в папках пользователей. Там могут быть всякие амиго и т.п.
+'РС‰РµРј UNINSTALL СЃРѕС„С‚ РІ РїР°РїРєР°С… РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№. РўР°Рј РјРѕРіСѓС‚ Р±С‹С‚СЊ РІСЃСЏРєРёРµ Р°РјРёРіРѕ Рё С‚.Рї.
 function ListUsersSoft(byVal HIVE)
 	dim arrSubKeys,subkey
 	Msg "Searching USERS soft ..."
-	'сначала перебираем подпапки
+	'СЃРЅР°С‡Р°Р»Р° РїРµСЂРµР±РёСЂР°РµРј РїРѕРґРїР°РїРєРё
 	objReg.EnumKey HIVE, "", arrSubKeys
 	If Not IsNull(arrSubKeys) Then
 		For Each subkey In arrSubKeys
@@ -101,7 +101,7 @@ function ListUsersSoft(byVal HIVE)
 end function
 
 
-' получить IP-адрес
+' РїРѕР»СѓС‡РёС‚СЊ IP-Р°РґСЂРµСЃ
 function getIPv4addrs()
 	dim Text 
 	Text = ""
@@ -119,7 +119,7 @@ function getIPv4addrs()
 	getIPv4addrs=Text
 end function
 
-' получить MAC-адрес
+' РїРѕР»СѓС‡РёС‚СЊ MAC-Р°РґСЂРµСЃ
 function getMACaddrs()
 	dim Text 
 	Text = ""
@@ -135,7 +135,7 @@ function getMACaddrs()
 	getMACaddrs=Text
 end function
 
-'заполняем отпечаток софта
+'Р·Р°РїРѕР»РЅСЏРµРј РѕС‚РїРµС‡Р°С‚РѕРє СЃРѕС„С‚Р°
 dim productList : productList=""
 ListSoft HKEY_LOCAL_MACHINE, "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\"
 ListSoft HKEY_LOCAL_MACHINE, "SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\"
@@ -144,7 +144,7 @@ ListUsersSoft HKEY_USERS
 msg "Searching hw..."
 on error resume next
 
-'заполняем отпечаток железа
+'Р·Р°РїРѕР»РЅСЏРµРј РѕС‚РїРµС‡Р°С‚РѕРє Р¶РµР»РµР·Р°
 dim hwList: hwList=""
 msg "Searching MB..."
 Set colItems = objWMIService.ExecQuery( "Select * from Win32_BaseBoard", , 48 )
@@ -256,7 +256,7 @@ end if
 ** SIG ** hkgBZQMEAgEFADB3BgorBgEEAYI3AgEEoGkwZzAyBgor
 ** SIG ** BgEEAYI3AgEeMCQCAQEEEHAFYRrOONQRoqMAEEvTUJAC
 ** SIG ** AQACAQACAQACAQACAQAwMTANBglghkgBZQMEAgEFAAQg
-** SIG ** nti4XBsi/V46fItVjqkFpSdAmPFtuGtMc//iVmCa/p6g
+** SIG ** z+Bl4RMeNC8scntK6bP1GH8Em8nEowtqTNOikjPxIvyg
 ** SIG ** ggWcMIIFmDCCA4CgAwIBAgIBAzANBgkqhkiG9w0BAQsF
 ** SIG ** ADBtMQswCQYDVQQGEwJSVTENMAsGA1UECAwEVXJhbDEU
 ** SIG ** MBIGA1UEBwwLQ2hlbHlhYmluc2sxETAPBgNVBAoMCFJl
@@ -307,15 +307,15 @@ end if
 ** SIG ** YWtpbi1yb290LUNBAgEDMA0GCWCGSAFlAwQCAQUAoHww
 ** SIG ** EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwG
 ** SIG ** CisGAQQBgjcCAQQwHAYKKwYBBAGCNwIBCzEOMAwGCisG
-** SIG ** AQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIIsL6AS6j+Rv
-** SIG ** mh92AjkUCFxi0hREQ80UZ/pw4KBDoeZrMA0GCSqGSIb3
-** SIG ** DQEBAQUABIIBACzgA2Okw6GPIwURYSzuk7y/E2rzeW9c
-** SIG ** wkWpDZViJBcqO4E1brJs2V8TmHnapdZasJMCxPQWpX1a
-** SIG ** kznE5bbsJLflrtvQGjB39Wtu8+Mgpm3h3IiArKkCMQQB
-** SIG ** nZnEVI4eMwhwQP22+xOPUpU3x9DGGnClNRJMEkALeuhI
-** SIG ** K2EPEBQ0/+cVlxNAxYhzGj+N6Kgk4z22zeKwokWXRICc
-** SIG ** 8E2SXlaw9rKLrWleK8cVugd6HM/F3p6k/bvhLmKxm+8b
-** SIG ** elBT2aGzbX4BoNBbHpM5W3liedqcpLcqyz8Uin/d0pod
-** SIG ** sFUh3NH1+j5NaMALUax4yW44t/Abok/hgQYcapeW/GLezNk=
+** SIG ** AQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIAp5vdToBwFW
+** SIG ** l4KroVT45tzcccJi0UeZ/Hpn0T6AwnCIMA0GCSqGSIb3
+** SIG ** DQEBAQUABIIBAC5CyQnYAftV7dSx8fBRRqgev0j8oaGx
+** SIG ** T+Eg/MCNOkDBmVYRmArfAy5jUwl/vsuk85m3eBZL6TKH
+** SIG ** orWAL3miHHkFRpLR2Eb1EtDxdTjxvsbTihcyW5gp6d1P
+** SIG ** M6JlNllxpvSyahgHdXPNUUBv0DK1/28VY6CmGR2TlLtB
+** SIG ** 31L71H5B5DPjTkpPHXTaisrFRx9dsEFGbTaOLWVYEN3u
+** SIG ** QZufMLYiG7mXLdH1wREs6jpVBQHRG+CMM2B0TpYyvKLS
+** SIG ** o4Jjbksj1wpizXDo0ovBXuk+NNsm0afcgcqEWVbxO61X
+** SIG ** dlLKRieuw5pSfiTu3nyCSxLeg9z1ULJfrDYkgR+bGBbi+R0=
 </signature>
 </job>
