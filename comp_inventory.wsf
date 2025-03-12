@@ -1,5 +1,9 @@
 <job id="Comp_inventory">
-<script language="VBScript" src="../libs/lib_core.vbs" ></script>
+<script language="VBScript" src="../libs/lib_core2.vbs" ></script>
+<script language="VBScript" src="../libs/lib_uac2.vbs" ></script>
+<script language="VBScript" src="../libs/lib_reg2.vbs" ></script>
+<script language="VBScript" src="../libs/lib_wmi2.vbs" ></script>
+<script language="VBScript" src="../libs/lib_fileio.vbs" ></script>
 <script language="VBScript" src="../libs/lib_http.vbs" ></script>
 <script language="VBScript" src="../libs/lib_inventory.vbs" ></script>
 <script language="VBScript" src="../libs/lib_displayinfo.vbs" ></script>
@@ -8,100 +12,119 @@
 <script language="VBScript">
 option explicit
 DEBUGMODE = 0
-'Ð¡ÐºÑ€Ð¸Ð¿Ñ‚ ÑÐ±Ð¾Ñ€Ð° Ð´Ð°Ð½Ð½Ñ‹Ñ… Ð¾ ÐºÐ¾Ð½Ñ„Ð¸Ð³ÑƒÑ€Ð°Ñ†Ð¸Ð¸ ÐºÐ¾Ð¼Ð¿Ð°
-'v0.16 * Ñ€Ð°Ð±Ð¾Ñ‚Ð° Ñ Ð½Ð¾Ð²Ñ‹Ð¼ API Ñ Ð¾Ð±ÑÐ·Ð°Ñ‚ÐµÐ»ÑŒÐ½Ð¾Ð¹ Ð°Ð²Ñ‚Ð¾Ñ€Ð¸Ð·Ð°Ð¹Ð¸Ðµ, ÑÐ»ÐµÐ¿Ñ‹Ð¼ PUSH Ð´Ð°Ð½Ð½Ñ‹Ñ…, Ð±ÐµÐ· Ñ‡Ñ‚ÐµÐ½Ð¸Ñ Ð²Ð¾Ð¾Ð±Ñ‰Ðµ Ñ Ð¼Ð¸Ð½Ð¸Ð¼Ð°Ð»ÑŒÐ½Ñ‹Ð¼ Ð½Ð°Ð±Ð¾Ñ€Ð¾Ð¼ Ð¿Ñ€Ð°Ð²
-'v0.15 * Ð²ÐºÐ»ÑŽÑ‡ÐµÐ½ option explicit, Ð²ÑÐµ Ñ„ÑƒÐ½ÐºÑ†Ð¸Ð¸ Ñ€Ð°Ð±Ð¾Ñ‚Ñ‹ Ñ Ð¸Ð½Ð²ÐµÐ½Ñ‚Ð¾Ñ€Ð¸ Ð²Ñ‹Ð½ÐµÑÐµÐ½Ñ‹ Ð² Ð±Ð¸Ð±Ð»Ð¸Ð¾Ñ‚ÐµÐºÑƒ (Ñ‚Ð°Ðº Ñ‚Ð°ÐºÐ¶Ðµ option explicit)
-'v0.14 + Ð¢ÐµÐ¿ÐµÑ€ÑŒ ÑÐ¾Ð±Ð¸Ñ€Ð°ÐµÑ‚ÑÑ Ð¸ MAC (Ð¢Ñ€ÐµÐ±ÑƒÐµÑ‚ÑÑ Ð¿Ð¾Ð´Ð´ÐµÑ€Ð¶ÐºÐ° ÑÐ¾ ÑÑ‚Ð¾Ñ€Ð¾Ð½Ñ‹ Ð‘Ð”)
-'v0.13 + Ð¢ÐµÐ¿ÐµÑ€ÑŒ Ð˜Ð” ÐºÐ¾Ð¼Ð¿ÑŒÑŽÑ‚ÐµÑ€Ð° ÑÐ¾Ñ…Ñ€Ð°Ð½ÑÐµÑ‚ÑÑ Ð² Ñ€ÐµÐµÑÑ‚Ñ€Ðµ
-'      * Ð¢ÐµÐ¿ÐµÑ€ÑŒ ÑÐºÑ€Ð¸Ð¿Ñ‚ Ñ‚Ñ€ÐµÐ±ÑƒÐµÑ‚ Ð¿Ñ€Ð°Ð²Ð° Ð°Ð´Ð¼Ð¸Ð½Ð°
-'v0.12 * Ð˜Ð¼Ñ ÐºÐ¾Ð¼Ð¿ÑŽÑ‚ÐµÑ€Ð° Ñ‚ÐµÐ¿ÐµÑ€ÑŒ Ð±ÐµÑ€ÐµÑ‚ÑÑ Ð¿Ð¾Ð»Ð½Ð¾Ðµ (Ð° Ð½Ðµ NETBIOS)
-'v0.11 * Ñ„ÑƒÐ½ÐºÑ†Ð¾Ð½Ð¸Ð½Ð°Ð» XML Ð¿Ð°Ñ€ÑÐ¸Ð½Ð³Ð° Ð¸ HTTP REST Ð²Ñ‹Ð½ÐµÑÐµÐ½ Ð² lib_http, URL.encdode/decode -> lib_url
-'v0.10rc2 ! Ð’ÑÐµ Ð¾Ð±Ñ€Ð°Ñ‰ÐµÐ½Ð¸Ñ Ðº WMI Ñ‚ÐµÐ¿ÐµÑ€ÑŒ Ð¸Ð´ÑƒÑ‚ Ñ Ð¾Ñ‚ÐºÐ»ÑŽÑ‡ÐµÐ½Ð¸ÐµÐ¼ Ð²Ñ‹Ð±Ñ€Ð¾ÑÐ° Ð¾ÑˆÐ¸Ð±Ð¾Ðº Ð¸ Ñ€Ð°ÑÑÑ‡Ð¸Ñ‚Ð°Ð½Ñ‹ Ð½Ð° Ð²Ð¾Ð·Ð¼Ð¾Ð¶Ð½Ð¾ÑÑ‚ÑŒ ÑÐ±Ð¾Ñ Ð·Ð°Ð¿Ñ€Ð¾ÑÐ°
-'v0.10rc + Ð¡Ð¾Ñ…Ñ€Ð°Ð½ÐµÐ½Ð¸Ðµ IP Ð°Ð´Ñ€ÐµÑÐ°(Ð¾Ð²)
-'v0.9.1 ! ÐŸÐž ÑÑ‡Ð¸Ñ‚Ð°Ð»Ð¾ÑÑŒ ÑÐ¸ÑÑ‚ÐµÐ¼Ð½Ð¾Ð¹ ÐºÐ¾Ð¼Ð¿Ð¾Ð½ÐµÐ½Ñ‚Ð¾Ð¹ Ñ‚Ð¾Ð»ÑŒÐºÐ¾ Ð¿Ð¾ Ð½Ð°Ð»Ð¸Ñ‡Ð¸ÑŽ Ð¿Ð°Ñ€Ð°Ð¼ÐµÑ‚Ñ€Ð° SystemComponent, Ð½ÐµÐ·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ Ð¾Ñ‚ Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ñ
-'v0.9  * Ð”Ð¾Ð¼ÐµÐ½ Ñ‚ÐµÐ¿ÐµÑ€ÑŒ Ð½Ðµ Ð¾Ð±ÑÐ·Ð°Ñ‚ÐµÐ»ÑŒÐ½Ð¾Ðµ Ð¿Ð¾Ð»Ðµ, Ñ‡Ñ‚Ð¾ Ð¿Ð¾Ð·Ð²Ð¾Ð»Ð¸Ñ‚ Ð¾Ñ‚Ñ€Ð°Ð±Ð¾Ñ‚Ð°Ñ‚ÑŒ ÑÐºÑ€Ð¸Ð¿Ñ‚Ñƒ Ð½Ð° Ð½ÐµÐ´Ð¾Ð¼ÐµÐ½Ð½Ñ‹Ñ… Ð¼Ð°ÑˆÐ¸Ð½Ð°Ñ…
-'v0.8  ! Ð˜ÑÐ¿Ñ€Ð°Ð²Ð»ÐµÐ½Ð¾ ÐºÐ¾Ð´Ð¸Ñ€Ð¾Ð²Ð°Ð½Ð¸Ðµ Ð² Ñ„Ð¾Ñ€Ð¼Ð°Ñ‚ JSON
-'v0.7  * ÐžÐ¿ÐµÑ€Ð°Ñ†Ð¸Ð¾Ð½Ð½Ð°Ñ ÑÐ¸ÑÑ‚ÐµÐ¼Ð° Ñ‚ÐµÐ¿ÐµÑ€ÑŒ Ð²Ñ…Ð¾Ð´Ð¸Ñ‚ Ð² ÑÐ¿Ð¸ÑÐ¾Ðº ÐŸÐž,
-'v0.6  ! Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ðµ Ð¾Ð±ÑŠÐµÐ¼Ð° Ð²Ð¸Ð´ÐµÐ¾ÐºÐ°Ñ€Ñ‚Ñ‹ Ñ‚ÐµÐ¿ÐµÑ€ÑŒ Ñ‚ÐµÐºÑÑ‚Ð¾Ð²Ð¾Ðµ,
-'v0.5  ! Ð¸ÑÐ¿Ñ€Ð°Ð²Ð»ÐµÐ½Ð° Ð¾ÑˆÐ¸Ð±ÐºÐ° Ñ Ð¿Ñ€ÐµÐ¾Ð±Ñ€Ð°Ð·Ð¾Ð²Ð°Ð½Ð¸ÐµÐ¼ Ð¿ÑƒÑÑ‚Ð¾Ð³Ð¾ Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ñ Ð¾Ð±ÑŠÐµÐ¼Ð° Ð²Ð¸Ð´ÐµÐ¾ÐºÐ°Ñ€Ñ‚Ñ‹ Ð² 0 Ð½Ð° Windows XP,
-'	 ÐºÐ¾Ñ‚Ð¾Ñ€Ð°Ñ Ð¿Ñ€Ð¸Ð²Ð¾Ð´Ð¸Ð»Ð° Ðº Ð²Ñ‹Ð»ÐµÑ‚Ð°Ð½Ð¸ÑŽ ÑÐºÑ€Ð¸Ð¿Ñ‚Ð°.
-'v0.4  * ÑÐ¾Ñ„Ñ‚ Ð¸Ñ‰ÐµÑ‚ÑÑ ÐµÑ‰Ðµ Ð¸Ð· Ð²ÐµÑ‚ÐºÐ¸ WOW6432node
-'	 ÑÐ¾Ñ„Ñ‚ Ñ Ð¿Ð¾Ð¼ÐµÑ‚ÐºÐ¾Ð¹ "ÑÐ¸ÑÑ‚ÐµÐ¼Ð½Ð°Ñ ÐºÐ¾Ð¼Ð¿Ð¾Ð½ÐµÐ½Ñ‚Ð°" Ð½Ðµ Ð²Ñ‹Ð²Ð¾Ð´Ð¸Ñ‚ÑÑ Ð² Ð¾Ñ‚Ñ‡ÐµÑ‚
-'	 ÐµÑÐ»Ð¸ Ñƒ ÑÐ¾Ñ„Ñ‚Ð° ÐµÑÑ‚ÑŒ Ð¼ÐµÑ‚ÐºÐ° "Ñ€Ð¾Ð´Ð¸Ñ‚ÐµÐ»ÑŒÑÐºÐ¸Ð¹ Ð¿Ñ€Ð¾Ð´ÑƒÐºÑ‚" Ñ‚Ð¾ Ð¾Ð½ Ð² Ð¾Ñ‚Ñ‡ÐµÑ‚ Ð²Ñ‹Ð²Ð¾Ð´Ð¸Ñ‚ÑÑ
-'	 ÐºÐ°Ðº Ñ€Ð¾Ð´Ð¸Ñ‚ÐµÐ»ÑŒÑÐºÐ¸Ð¹ Ð¿Ñ€Ð¾Ð´ÑƒÐºÑ‚, Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð½Ð°Ð¼ Ð² Ð‘Ð” Ð½Ðµ Ð·Ð°Ñ‚Ð°Ð»ÐºÐ¸Ð²Ð°Ñ‚ÑŒ Ð²ÑÐµ ÑÑƒÐ±ÐºÐ¾Ð¼Ð¿Ð¾Ð½ÐµÐ½Ñ‚Ñ‹ Ð²Ñ€ÑƒÑ‡Ð½ÑƒÑŽ
-'v0.3  + Ð¾Ñ‚Ð¿Ñ€Ð°Ð²ÐºÐ° Ð´Ð°Ð½Ð½Ñ‹Ñ… ÑÐºÐ¾Ñ€Ñ€ÐµÐºÑ‚Ð¸Ñ€Ð¾Ð²Ð°Ð½Ð° Ð´Ð»Ñ ÑÐ¾Ð¾Ñ‚Ð²ÐµÑ‚ÑÑ‚Ð²Ð¸Ñ JSON Ñ„Ð¾Ñ€Ð¼Ð°Ñ‚Ñƒ
-'v0.2  * Ð¾Ñ‚Ð¿Ñ€Ð°Ð²ÐºÐ° Ð½Ð¾Ð²Ñ‹Ñ… Ð¸ Ð¾Ð±Ð½Ð¾Ð²Ð»ÐµÐ½Ð¸Ðµ ÑƒÐ¶Ðµ Ð¸Ð¼ÐµÑŽÑ‰Ð¸Ñ…ÑÑ Ð´Ð°Ð½Ð½Ñ‹Ñ… Ñ‡ÐµÑ€ÐµÐ· API POST/PUT
-'	 Ð² Ð¿Ñ€Ð¸Ð½Ñ†Ð¸Ð¿Ðµ ÑƒÐ¶Ðµ Ñ€Ð°Ð±Ð¾Ñ‡Ð¸Ð¹ ÑÐºÑ€Ð¸Ð¿Ñ‚ Ð¸ Ð¼Ð¾Ð¶ÐµÑ‚ Ð½Ð°Ð¿Ð¾Ð»Ð½ÑÑ‚ÑŒ Ð‘Ð”
-'v0.1  + Ð´Ð¾Ð±Ð°Ð²Ð»ÐµÐ½Ð° Ð¾Ñ‚Ð¿Ñ€Ð°Ð²ÐºÐ° Ð´Ð°Ð½Ð½Ñ‹Ñ… Ð² Ð‘Ð”!
-'v0.02 + ÑÐ±Ð¾Ñ€ Ð´Ð°Ð½Ð½Ñ‹Ñ… Ð¾ Ð¶ÐµÐ»ÐµÐ·Ðµ: Ð¼Ð°Ñ‚ÑŒ, Ð¿Ñ€Ð¾Ñ†, Ð¿Ð»Ð°Ð½ÐºÐ¸ Ð¾Ð¿ÐµÑ€Ð°Ñ‚Ð¸Ð²ÐºÐ¸, Ð´Ð¸ÑÐºÐ¸, Ð²Ð¸Ð´ÐµÐ¾
-'v0.01 * initial: ÑÐ±Ð¾Ñ€ Ð´Ð°Ð½Ð½Ñ‹Ñ… Ð¾ ÑÐ¾Ñ„Ñ‚Ðµ Ð¸Ð· wmi product get name Ð¸ Ð²ÐµÑ‚Ð¾Ðº Ñ€ÐµÐµÑÑ‚Ñ€Ð° Uninstall
-'	Ñ‚.Ðº. wmi Ð¾Ñ‚Ð´Ð°ÐµÑ‚ Ð¸Ð½Ñ„Ñƒ Ñ‚Ð¾Ð»ÑŒÐºÐ¾ Ð¿Ð¾ Ð¿Ñ€Ð¾Ð´ÑƒÐºÑ‚Ð°Ð¼ ÑƒÑÑ‚Ð°Ð½Ð¾Ð²Ð»ÐµÐ½Ð½Ñ‹Ð¼ Ñ‡ÐµÑ€ÐµÐ· MSI
-'	Ð¾Ñ‚Ð¿Ñ€Ð°Ð²ÐºÐ¸ Ð´Ð°Ð½Ð½Ñ‹Ñ… Ð¿Ð¾ÐºÐ° Ð½ÐµÑ‚. Ñ‚Ð¾Ð»ÑŒÐºÐ¾ ÑÐ±Ð¾Ñ€
+'Ñêðèïò ñáîðà äàííûõ î êîíôèãóðàöèè êîìïà
+'v2.0  * ïåðåõîä íà èñïîëüçîâàíèå lib_core2 (v3.0)
+'      + Êýøèðîâàíèå ïîëüçîâàòåëüñêîãî ñîôòà äëÿ ïîñëåäþùåãî åãî ó÷åòà â ñïèñêå ÏÎ â ñëó÷àå êîãäà åãî ðååñòð íå çàãðóæåí (ïîëüçîâàòåëü íå âõîäèë â ÏÊ)
+'        ýòî ñêëþ÷àåò ñèòóàöèè ñ "ìîðãàíèåì" ïîëüçîâàòåëüñêîãî ÏÎ â îáùåì ñïèñêå
+'      * óìåíüøåí îáùèé îáúåì ñïèñêà ÏÎ, ò.ê. ïåðåäàþòñÿ òîëüêî óíèêàëüíûå çàïèñè (ââèäó òîãî, ÷òî ìû ïåðåèìåíîâûâàåì êîìïîíåíòû â ñâîåãî ðîäèòåëÿ)
+'v0.18 ! Microsoft Virtual Disk òàêæå èñêëþ÷åí èç ñïèñêà îáîðóäîâàíèÿ
+'v0.17 ! âèäåîêàðòà Microsoft Remote Display Adapter èñêëþ÷àåòñÿ èç îáîðóäîâàíèÿ, ò.ê. îíà òî åñòü òî íåò, ÷òî çàáèâàåò æóðíàëû èçìåíåíèé
+'v0.16 * ðàáîòà ñ íîâûì API ñ îáÿçàòåëüíîé àâòîðèçàéèå, ñëåïûì PUSH äàííûõ, áåç ÷òåíèÿ âîîáùå ñ ìèíèìàëüíûì íàáîðîì ïðàâ
+'v0.15 * âêëþ÷åí option explicit, âñå ôóíêöèè ðàáîòû ñ èíâåíòîðè âûíåñåíû â áèáëèîòåêó (òàê òàêæå option explicit)
+'v0.14 + Òåïåðü ñîáèðàåòñÿ è MAC (Òðåáóåòñÿ ïîääåðæêà ñî ñòîðîíû ÁÄ)
+'v0.13 + Òåïåðü ÈÄ êîìïüþòåðà ñîõðàíÿåòñÿ â ðååñòðå
+'      * Òåïåðü ñêðèïò òðåáóåò ïðàâà àäìèíà
+'v0.12 * Èìÿ êîìïþòåðà òåïåðü áåðåòñÿ ïîëíîå (à íå NETBIOS)
+'v0.11 * ôóíêöîíèíàë XML ïàðñèíãà è HTTP REST âûíåñåí â lib_http, URL.encdode/decode -> lib_url
+'v0.10rc2 ! Âñå îáðàùåíèÿ ê WMI òåïåðü èäóò ñ îòêëþ÷åíèåì âûáðîñà îøèáîê è ðàññ÷èòàíû íà âîçìîæíîñòü ñáîÿ çàïðîñà
+'v0.10rc + Ñîõðàíåíèå IP àäðåñà(îâ)
+'v0.9.1 ! ÏÎ ñ÷èòàëîñü ñèñòåìíîé êîìïîíåíòîé òîëüêî ïî íàëè÷èþ ïàðàìåòðà SystemComponent, íåçàâèñèìî îò çíà÷åíèÿ
+'v0.9  * Äîìåí òåïåðü íå îáÿçàòåëüíîå ïîëå, ÷òî ïîçâîëèò îòðàáîòàòü ñêðèïòó íà íåäîìåííûõ ìàøèíàõ
+'v0.8  ! Èñïðàâëåíî êîäèðîâàíèå â ôîðìàò JSON
+'v0.7  * Îïåðàöèîííàÿ ñèñòåìà òåïåðü âõîäèò â ñïèñîê ÏÎ,
+'v0.6  ! çíà÷åíèå îáúåìà âèäåîêàðòû òåïåðü òåêñòîâîå,
+'v0.5  ! èñïðàâëåíà îøèáêà ñ ïðåîáðàçîâàíèåì ïóñòîãî çíà÷åíèÿ îáúåìà âèäåîêàðòû â 0 íà Windows XP,
+'	 êîòîðàÿ ïðèâîäèëà ê âûëåòàíèþ ñêðèïòà.
+'v0.4  * ñîôò èùåòñÿ åùå èç âåòêè WOW6432node
+'	 ñîôò ñ ïîìåòêîé "ñèñòåìíàÿ êîìïîíåíòà" íå âûâîäèòñÿ â îò÷åò
+'	 åñëè ó ñîôòà åñòü ìåòêà "ðîäèòåëüñêèé ïðîäóêò" òî îí â îò÷åò âûâîäèòñÿ
+'	 êàê ðîäèòåëüñêèé ïðîäóêò, ÷òîáû íàì â ÁÄ íå çàòàëêèâàòü âñå ñóáêîìïîíåíòû âðó÷íóþ
+'v0.3  + îòïðàâêà äàííûõ ñêîððåêòèðîâàíà äëÿ ñîîòâåòñòâèÿ JSON ôîðìàòó
+'v0.2  * îòïðàâêà íîâûõ è îáíîâëåíèå óæå èìåþùèõñÿ äàííûõ ÷åðåç API POST/PUT
+'	 â ïðèíöèïå óæå ðàáî÷èé ñêðèïò è ìîæåò íàïîëíÿòü ÁÄ
+'v0.1  + äîáàâëåíà îòïðàâêà äàííûõ â ÁÄ!
+'v0.02 + ñáîð äàííûõ î æåëåçå: ìàòü, ïðîö, ïëàíêè îïåðàòèâêè, äèñêè, âèäåî
+'v0.01 * initial: ñáîð äàííûõ î ñîôòå èç wmi product get name è âåòîê ðååñòðà Uninstall
+'	ò.ê. wmi îòäàåò èíôó òîëüêî ïî ïðîäóêòàì óñòàíîâëåííûì ÷åðåç MSI
+'	îòïðàâêè äàííûõ ïîêà íåò. òîëüêî ñáîð
 
 forceCscript
 
-const scrName="gp_compInventory" : const scrVer="0.16"
+const scrName="gp_compInventory" : const scrVer="win 2.0"
 dim logFile : logFile = WorkDir & scrName & ".log"
 
 Msg "-" : Msg "Script started: "&scrName&" "&scrVer&" (core "&coreLibVer&")"
+checkDir inventory_local_cache
 dim objWMIService
 Set objWMIService = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\cimv2")
 dim colItems,objItem
 
-'privelegeMe()
-'checkFullAdminRights()
+privelegeMe()
+checkFullAdminRights()
 
-
-'Ð¿Ð¾Ð¸ÑÐº ÑƒÑÑ‚Ð°Ð½Ð¾Ð²Ð»ÐµÐ½Ð½Ð¾Ð³Ð¾ ÑÐ¾Ñ„Ñ‚Ð° Ð² Ð¿Ð°Ð¿ÐºÐµ UNINSTALL Ð² Ñ€ÐµÐµÑÑ‚Ñ€Ðµ - Ð¿ÐµÑ€ÐµÐ±Ð¸Ñ€Ð°ÐµÐ¼ Ð¿Ð¾Ð´Ð¿Ð°Ð¿ÐºÐ¸ Ð¸ Ð¸Ñ‰ÐµÐ¼ Ð² Ð½Ð¸Ñ… ProductName
-function ListSoft(byVal HIVE, byVal path)
+'ïîèñê óñòàíîâëåííîãî ñîôòà â ïàïêå UNINSTALL â ðååñòðå - ïåðåáèðàåì ïîäïàïêè è èùåì â íèõ ProductName
+function ListSoft(byVal Path)
+	ListSoft=""
 	dim arrSubKeys, subkey, Publisher, ProductName, ParentProduct, SystemFlag
-	Msg "Searching soft in " & path & "..."
-	'ÑÐ½Ð°Ñ‡Ð°Ð»Ð° Ð¿ÐµÑ€ÐµÐ±Ð¸Ñ€Ð°ÐµÐ¼ Ð¿Ð¾Ð´Ð¿Ð°Ð¿ÐºÐ¸
-	objReg.EnumKey HIVE, path, arrSubKeys
+	
+	Msg "Searching soft in " & Path & "..."
+	'ñíà÷àëà ïåðåáèðàåì ïîäïàïêè
+	arrSubKeys = RegEnumKeys (Path)
 	If Not IsNull(arrSubKeys) Then
 		For Each subkey In arrSubKeys
-			Publisher=""
-			ProductName=""
-			ParentProduct=""
-			SystemFlag = ""
-			'on error resume next
-			objReg.GetStringValue HIVE, path & "\" & subkey, "Publisher", Publisher
-			objReg.GetStringValue HIVE, path & "\" & subkey, "DisplayName", ProductName
-			objReg.GetStringValue HIVE, path & "\" & subkey, "ParentDisplayName", ParentProduct
-			objReg.GetDWORDValue HIVE, path & "\" & subkey, "SystemComponent", SystemFlag
-			'on error goto 0
-			if (SystemFlag = "1") then 'Ð¿Ñ€Ð¾Ð¿ÑƒÑÐºÐ°ÐµÐ¼ ÑÐ¸ÑÑ‚ÐµÐ¼Ð½Ñ‹Ðµ ÐºÐ¾Ð¼Ð¿Ð¾Ð½ÐµÐ½Ñ‚Ñ‹
-				Msg "System component found: "& subkey & " " & Publisher & " " & ProductName
+
+			Publisher=	RegRead (Path & "\" & subkey & "\Publisher") 
+			ProductName=	RegRead (Path & "\" & subkey & "\DisplayName")
+			ParentProduct=	RegRead (Path & "\" & subkey & "\ParentDisplayName")
+			SystemFlag=	RegRead (Path & "\" & subkey & "\SystemComponent")
+
+			if (SystemFlag = "1") then 'ïðîïóñêàåì ñèñòåìíûå êîìïîíåíòû
+				Msg "System component skip: "& subkey & " " & Publisher & " " & ProductName
 			else 
-				'ÐµÑÐ»Ð¸ Ñƒ Ð½Ð°Ñ ÐµÑÑ‚ÑŒ Ñ€Ð¾Ð´Ð¸Ñ‚ÐµÐ»ÑŒÑÐºÐ¸Ð¹ Ð¿Ñ€Ð¾Ð´ÑƒÐºÑ‚, Ñ‚Ð¾ Ð¼Ñ‹ ÐµÐ³Ð¾ Ð¸ Ð²Ð¿Ð¸ÑˆÐµÐ¼, Ð½Ð° Ð½Ðµ Ð¸Ð½Ñ‚ÐµÑ€ÐµÑÐ½Ð¾ Ð¼ÐµÐ»Ð¾Ñ‡Ð¸Ñ‚ÑŒÑÑ Ñ€Ð°Ð·Ð³Ð»ÑÐ´Ñ‹Ð²Ð°Ñ ÐºÐ¾Ð¼Ð¿Ð¾Ð½ÐµÐ½Ñ‚Ñ‹
-				if (not ParentProduct = "") then ProductName = ParentProduct
-				if (not ProductName = "") then
+				'åñëè ó íàñ åñòü ðîäèòåëüñêèé ïðîäóêò, òî ìû åãî è âïèøåì, íàì íå èíòåðåñíî ìåëî÷èòüñÿ ðàçãëÿäûâàÿ êîìïîíåíòû
+				if not (ParentProduct = "" or ParentProduct = false) then ProductName = ParentProduct
+				if not (ProductName = "" or ProductName = false) then
 					Msg "Soft found: "& subkey & " " & Publisher & " " & ProductName
-					if (Len(productList)>0) then productList=productList & ","
-					productList=productList & "{""publisher"":""" & URL.addslashes(Publisher) &""", ""name"":""" & URL.addslashes(ProductName) & """}" '& vbCrLf
+					stringCommaAdd ListSoft, vbCrLf, _ 
+						"{""publisher"":""" & URL.addslashes(Publisher) & """, ""name"":""" & URL.addslashes(ProductName) & """}"
 				end if
 			end if
 		Next
 	End If
 end function
 
-'Ð˜Ñ‰ÐµÐ¼ UNINSTALL ÑÐ¾Ñ„Ñ‚ Ð² Ð¿Ð°Ð¿ÐºÐ°Ñ… Ð¿Ð¾Ð»ÑŒÐ·Ð¾Ð²Ð°Ñ‚ÐµÐ»ÐµÐ¹. Ð¢Ð°Ð¼ Ð¼Ð¾Ð³ÑƒÑ‚ Ð±Ñ‹Ñ‚ÑŒ Ð²ÑÑÐºÐ¸Ðµ Ð°Ð¼Ð¸Ð³Ð¾ Ð¸ Ñ‚.Ð¿.
-function ListUsersSoft(byVal HIVE)
-	dim arrSubKeys,subkey
+'Èùåì UNINSTALL ñîôò â ïàïêàõ ïîëüçîâàòåëåé. Òàì ìîãóò áûòü âñÿêèå àìèãî è ò.ï.
+function ListUsersSoft()
+	ListUsersSoft=""
+	dim arrProfiles, profile, profileSoft, cacheFile
 	Msg "Searching USERS soft ..."
-	'ÑÐ½Ð°Ñ‡Ð°Ð»Ð° Ð¿ÐµÑ€ÐµÐ±Ð¸Ñ€Ð°ÐµÐ¼ Ð¿Ð¾Ð´Ð¿Ð°Ð¿ÐºÐ¸
-	objReg.EnumKey HIVE, "", arrSubKeys
-	If Not IsNull(arrSubKeys) Then
-		For Each subkey In arrSubKeys
-			'on error resume next
-			msg Subkey
-			ListSoft HIVE, subkey & "\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\"
+	'ñíà÷àëà ïåðåáèðàåì ïðîôèëè
+	arrProfiles = RegEnumKeys("HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList")
+	If Not IsNull(arrProfiles) Then
+		For Each profile In arrProfiles
+			if right(profile,4) = ".bak" then
+				msg profile & " - SKIP"
+			else
+				cacheFile = inventory_local_cache & "\" & profile
+				if regPathExists ("HKEY_USERS\" & profile) then
+					msg profile & " - LOADED"
+					profileSoft=ListSoft ("HKEY_USERS\" & profile & "\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\")
+					WriteFile cacheFile, profileSoft
+				elseif objFSO.FileExists(cacheFile) then
+					msg profile & " - CACHED"
+					profileSoft = profileSoft
+				else
+					msg profile & " - MISSING"
+					profileSoft = ""
+				end if		
+				stringCommaAdd ListUsersSoft,vbCrLf,profileSoft
+			end if
 		Next
 	End If
 end function
 
 
-' Ð¿Ð¾Ð»ÑƒÑ‡Ð¸Ñ‚ÑŒ IP-Ð°Ð´Ñ€ÐµÑ
+' ïîëó÷èòü IP-àäðåñ
 function getIPv4addrs()
 	dim Text 
 	Text = ""
@@ -119,7 +142,7 @@ function getIPv4addrs()
 	getIPv4addrs=Text
 end function
 
-' Ð¿Ð¾Ð»ÑƒÑ‡Ð¸Ñ‚ÑŒ MAC-Ð°Ð´Ñ€ÐµÑ
+' ïîëó÷èòü MAC-àäðåñ
 function getMACaddrs()
 	dim Text 
 	Text = ""
@@ -135,99 +158,90 @@ function getMACaddrs()
 	getMACaddrs=Text
 end function
 
-'Ð·Ð°Ð¿Ð¾Ð»Ð½ÑÐµÐ¼ Ð¾Ñ‚Ð¿ÐµÑ‡Ð°Ñ‚Ð¾Ðº ÑÐ¾Ñ„Ñ‚Ð°
+'çàïîëíÿåì îòïå÷àòîê ñîôòà
 dim productList : productList=""
-ListSoft HKEY_LOCAL_MACHINE, "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\"
-ListSoft HKEY_LOCAL_MACHINE, "SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\"
-ListUsersSoft HKEY_USERS
+stringCommaAdd productList, vbCrLf, ListSoft("HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\")
+stringCommaAdd productList, vbCrLf, ListSoft("HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\")
+stringCommaAdd productList, vbCrLf, ListUsersSoft()
+
+productList=arrayImplode(arrayUniqueStrings(stringExplode(productList,vbCrLf)),",")
+wscript.echo productList
 
 msg "Searching hw..."
 on error resume next
 
-'Ð·Ð°Ð¿Ð¾Ð»Ð½ÑÐµÐ¼ Ð¾Ñ‚Ð¿ÐµÑ‡Ð°Ñ‚Ð¾Ðº Ð¶ÐµÐ»ÐµÐ·Ð°
+'çàïîëíÿåì îòïå÷àòîê æåëåçà
 dim hwList: hwList=""
+
 msg "Searching MB..."
-Set colItems = objWMIService.ExecQuery( "Select * from Win32_BaseBoard", , 48 )
-For Each objItem in colItems
-	comma=""
-	if (Len(hwList)>0) then comma= ","
-	hwList = hwList & comma & "{""motherboard"":{"_
+For Each objItem in getWmiQueryArrayCrit( "Select * from Win32_BaseBoard")
+	stringCommaAdd hwList, ",", "{""motherboard"":{"_
 		& """manufacturer"":""" & TrimWithTabs( URL.addslashes(objItem.Manufacturer )) & """, " _
-		& """product"":""" &TrimWithTabs( URL.addslashes(objItem.Product ))  & """, " _
-		& """serial"":""" &TrimWithTabs( URL.addslashes(objItem.SerialNumber ))  & """" _
+		& """product"":""" & TrimWithTabs( URL.addslashes(objItem.Product )) & """, " _
+		& """serial"":""" & TrimWithTabs( URL.addslashes(objItem.SerialNumber )) & """" _
 	& "}}"
-	'hard(UBound(hard))="{""publisher"":""" & Publisher &""", ""name"":""" & ProductName & """}"
 Next
 
 msg "Searching CPU..."
-
-Set colItems = objWMIService.ExecQuery( "Select * from Win32_Processor", , 48 )
-For Each objItem in colItems
-	dim comma : comma=""
-	if (Len(hwList)>0) then comma= ","
-	hwList = hwList & comma & "{""processor"":{" _
+For Each objItem in getWmiQueryArrayCrit( "Select * from Win32_Processor")
+	stringCommaAdd hwList, ",", "{""processor"":{" _
 		& """model"":""" & TrimWithTabs( URL.addslashes(objItem.Name)) & """, " _
-		& """cores"":"""&objItem.numberOfCores&"""" _
+		& """cores"":""" & objItem.numberOfCores & """" _
 	& "}}"
 Next
 
 msg "Searching MEM Banks..."
-
-Set colItems = objWMIService.ExecQuery("Select * from Win32_PhysicalMemory")
-For Each objItem in colItems
-	comma=""
-	if (Len(hwList)>0) then comma= ","
-	hwList = hwList & comma & "{""memorybank"":{"_
+For Each objItem in getWmiQueryArrayCrit("Select * from Win32_PhysicalMemory")
+	stringCommaAdd hwList, ",", "{""memorybank"":{"_
 		& """manufacturer"":""" & URL.addslashes(objItem.Manufacturer) & """, "_
 		& """capacity"":""" & round(objItem.Capacity / 1048576) & """" _
 	& "}}"
 Next
 
 msg "Searching Drives..."
-
-Set colItems = objWMIService.ExecQuery( "Select * from Win32_DiskDrive", , 48 )
-For Each objItem in colItems
+For Each objItem in getWmiQueryArrayCrit("Select * from Win32_DiskDrive")
+	dim driveOk: driveOk=true
 	dim driveSize : driveSize=objItem.Size
 	if (isnull(driveSize)) then driveSize=0
+	if (objItem.Model = "Microsoft Virtual Disk") then driveOk=false
+	if (objItem.Model = "Âèðòóàëüíûé äèñê (Ìàéêðîñîôò)") then driveOk=false
 
-	comma=""
-	if (Len(hwList)>0) then comma= ","
-	hwList = hwList & comma & "{""harddisk"":{" _
-		& """model"":""" & URL.addslashes(objItem.Model) & """," _
-		& """size"":""" & Int(round(CDbl(driveSize) /1000/1000/1000)) & """" _
-	& "}}"
+	if driveOk then
+		stringCommaAdd hwList, ",", "{""harddisk"":{" _
+			& """model"":""" & URL.addslashes(objItem.Model) & """," _
+			& """size"":""" & Int(round(CDbl(driveSize) /1000/1000/1000)) & """," _
+			& """serial"":""" &TrimWithTabs( URL.addslashes(objItem.SerialNumber ))  & """" _
+		& "}}"
+	end if
 Next
 
 msg "Searching GPU..."
-
-' Query video adapter properties
-Set colItems = objWMIService.ExecQuery( "Select * from Win32_VideoController", , 48 )
-For Each objItem in colItems
-	comma=""
-	if (Len(hwList)>0) then comma= ","
-	hwList = hwList & comma & "{""videocard"":{" _
-		& """name"":""" & URL.addslashes(objItem.Name) & """," _
-		& """ram"":""" & Int( ( abs(objItem.AdapterRAM )) / 1024 /1024 ) & """" _
-	& "}}"
+For Each objItem in getWmiQueryArrayCrit( "Select * from Win32_VideoController")
+	dim cardOk: cardOk=true
+	'ïðîïóñêàåì íå íàñòîÿùóþ âèäåîêàðòó èáî îíà ìîæåò ìîðãàòü òî åñòü òî íåò, ÷åì çàáèâàòü èñòîðèþ èçìåíåíèÿ ÎÑ
+	if (objItem.Name = "Microsoft Remote Display Adapter") then cardOk=false
+	if cardOk then
+		stringCommaAdd hwList, ",", "{""videocard"":{" _
+			& """name"":""" & URL.addslashes(objItem.Name) & """," _
+			& """ram"":""" & Int( ( abs(objItem.AdapterRAM )) / 1024 /1024 ) & """" _
+		& "}}"
+	end if
 Next
 
 msg "Searching Display ..."
 
 dim monList : monList=GetMonitorInfo
 if (Len(monList)>0 ) then
-	if (Len(hwList)>0) then hwList=hwList & ","
-	hwList=hwList & monList
+	stringCommaAdd hwList, ",", monList
 end if
 
 on error goto 0
 
 msg "Searching OS Version ..."
 dim strOS
-Set colItems = objWMIService.ExecQuery( "Select * from Win32_OperatingSystem", , 48 )
-For Each objItem in colItems
+For Each objItem in getWmiQueryArrayCrit( "Select * from Win32_OperatingSystem")
 	strOS = objItem.Version&" "&objItem.Caption
-	if (Len(productList)>0) then productList=productList & ","
-	productList=productList & "{""publisher"":""Microsoft"", ""name"":""" & URL.addslashes(objItem.Caption) & """}" '& vbCrLf
+	stringCommaAdd hwList, ",", "{""publisher"":""Microsoft"", ""name"":""" & URL.addslashes(objItem.Caption) & """}"
 Next
 
 msg "Searching IPs ..."
@@ -238,12 +252,9 @@ dim domainID, compID
 
 msg "Searching Domain name..."
 dim strComputerDomain
-on error resume next
-Set colItems = objWMIService.ExecQuery( "Select * from Win32_ComputerSystem" , , 48 )
-For Each objItem in colItems
+For Each objItem in getWmiQueryArrayCrit( "Select * from Win32_ComputerSystem")
 	strComputerDomain = objItem.Domain
 Next
-on error goto 0
 
 dim id : id = invPushComp(ComputerName & "." & strComputerDomain, strOS, hwList, productList, IPv4addrs, MACaddrs)
 
@@ -253,71 +264,4 @@ end if
 
 </script>
 
-<signature>
-** SIG ** MIIIXwYJKoZIhvcNAQcCoIIIUDCCCEwCAQExDzANBglg
-** SIG ** hkgBZQMEAgEFADB3BgorBgEEAYI3AgEEoGkwZzAyBgor
-** SIG ** BgEEAYI3AgEeMCQCAQEEEHAFYRrOONQRoqMAEEvTUJAC
-** SIG ** AQACAQACAQACAQACAQAwMTANBglghkgBZQMEAgEFAAQg
-** SIG ** z+Bl4RMeNC8scntK6bP1GH8Em8nEowtqTNOikjPxIvyg
-** SIG ** ggWcMIIFmDCCA4CgAwIBAgIBAzANBgkqhkiG9w0BAQsF
-** SIG ** ADBtMQswCQYDVQQGEwJSVTENMAsGA1UECAwEVXJhbDEU
-** SIG ** MBIGA1UEBwwLQ2hlbHlhYmluc2sxETAPBgNVBAoMCFJl
-** SIG ** dmlha2luMQswCQYDVQQLDAJJVDEZMBcGA1UEAwwQcmV2
-** SIG ** aWFraW4tcm9vdC1DQTAeFw0yMzA1MjUxNTM3MDBaFw0y
-** SIG ** NDA2MDMxNTM3MDBaMGMxCzAJBgNVBAYTAlJVMQ0wCwYD
-** SIG ** VQQIDARVcmFsMQ0wCwYDVQQHDARDaGVsMREwDwYDVQQK
-** SIG ** DAhSZXZpYWtpbjELMAkGA1UECwwCSVQxFjAUBgNVBAMM
-** SIG ** DXJldmlha2luLWNvZGUwggEiMA0GCSqGSIb3DQEBAQUA
-** SIG ** A4IBDwAwggEKAoIBAQCtsuYd7CVRsLwbN6ybLrnCr72O
-** SIG ** nqGhfdASM37B9yC8+b5nnbw6EqDEN2IHpy32wOoThAlg
-** SIG ** zPna/D5/VX/TYuLR/1vjW+vRQPKbJi8m97BMr8PemMWl
-** SIG ** w6mjl9x4qW0x4irIwXra/Z4R34BgrY8ZACZRah0riiWY
-** SIG ** GXPvCw3ZjNYMXRJF4rVKJ6c/PNg1bNlML1Q8oHcy3MPC
-** SIG ** CVCHF/Qf3Bl/l76GKJhylViC5/ZiX34LfzCopdK1xnnY
-** SIG ** 45cP1c83pQH2IE3ucjGMwzWDYCwTNAeYi69aaK40fGHC
-** SIG ** Z9EJg6sS1RnEyCpp+Sj23T/GOJyTxM4kaiPmlMDZoCAq
-** SIG ** UndLk6HVAgMBAAGjggFLMIIBRzAJBgNVHRMEAjAAMBEG
-** SIG ** CWCGSAGG+EIBAQQEAwIFoDAzBglghkgBhvhCAQ0EJhYk
-** SIG ** T3BlblNTTCBHZW5lcmF0ZWQgQ2xpZW50IENlcnRpZmlj
-** SIG ** YXRlMB0GA1UdDgQWBBSXtltT7BkMs4W7USOsFdk+mc0S
-** SIG ** HjAfBgNVHSMEGDAWgBSNQkTnQD4Z5d3UogsBh0kUyrwl
-** SIG ** pzAOBgNVHQ8BAf8EBAMCBeAwJwYDVR0lBCAwHgYIKwYB
-** SIG ** BQUHAwIGCCsGAQUFBwMEBggrBgEFBQcDAzA4BgNVHR8E
-** SIG ** MTAvMC2gK6AphidodHRwOi8vcGtpLnJldmlha2luLm5l
-** SIG ** dC9jcmwvcm9vdC1jYS5jcmwwPwYIKwYBBQUHAQEEMzAx
-** SIG ** MC8GCCsGAQUFBzAChiNodHRwOi8vcGtpLnJldmlha2lu
-** SIG ** L25ldC9yb290LWNhLmNydDANBgkqhkiG9w0BAQsFAAOC
-** SIG ** AgEAix6Hc2aULCO6RiT4W5PIiB9zQgA4BGT3W5YdSttn
-** SIG ** gGhnmWDEfT2bhB/ZnRLkrtZeL/sYDj94FIfKZMvFTsNN
-** SIG ** CUeDNiV9hQyJrsrI9Gq3nkgcnCOGc/9mqqL7ItS33s1M
-** SIG ** ltSXVA7sLhoQ65yPrP70kd3681COUsCYOq7hroIR3Th4
-** SIG ** L8INGLvUR+Xll1sunIHrnuiTD/GZFNemDec0f3n8mNKp
-** SIG ** 5KiWuYlNYv0Zg//rTvCZfk2Y74Mk/2lCeABVKcQoJai+
-** SIG ** XiSN0mq1b6RlFmfbiuzU3iudZ3SKHKEd3reGBXZxD7b1
-** SIG ** QubveA17QKbgzwjT6DX9ISFjbIOuB9HUo3Bl7VLZ4DyH
-** SIG ** 2mt0z+UC1zpE9DLFzoawf4f5/KN6mixGX9Q7tSQQCOKo
-** SIG ** Jiyk7Y+0aLXhK7RmJdDK3vIieJkXSx0ip1SXdRYgr0sQ
-** SIG ** VsNq2D2SYJ0A1r2wWJ4sNuiHnDuxWuxLsAdC0rZTlKis
-** SIG ** 21i4uOIr3BCj2MFdTTdkeX5xB979r/8MLBdrDlzoVxMz
-** SIG ** tEWwXdNlqiCQosIMVq44bJF1zjFPD6pYk0JgEF9y8wTd
-** SIG ** G2LyGFjTqJYyCrKrWFkQa8GX6pazj4EarEpNjdVC6IXJ
-** SIG ** YRa4vRqUEWfS9WeTGlIR9hJyqtHKAc9N82lwrhTlPhh+
-** SIG ** lkL15ZPRXnnd5aICNgQpndNfyBIxggIbMIICFwIBATBy
-** SIG ** MG0xCzAJBgNVBAYTAlJVMQ0wCwYDVQQIDARVcmFsMRQw
-** SIG ** EgYDVQQHDAtDaGVseWFiaW5zazERMA8GA1UECgwIUmV2
-** SIG ** aWFraW4xCzAJBgNVBAsMAklUMRkwFwYDVQQDDBByZXZp
-** SIG ** YWtpbi1yb290LUNBAgEDMA0GCWCGSAFlAwQCAQUAoHww
-** SIG ** EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwG
-** SIG ** CisGAQQBgjcCAQQwHAYKKwYBBAGCNwIBCzEOMAwGCisG
-** SIG ** AQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIAp5vdToBwFW
-** SIG ** l4KroVT45tzcccJi0UeZ/Hpn0T6AwnCIMA0GCSqGSIb3
-** SIG ** DQEBAQUABIIBAC5CyQnYAftV7dSx8fBRRqgev0j8oaGx
-** SIG ** T+Eg/MCNOkDBmVYRmArfAy5jUwl/vsuk85m3eBZL6TKH
-** SIG ** orWAL3miHHkFRpLR2Eb1EtDxdTjxvsbTihcyW5gp6d1P
-** SIG ** M6JlNllxpvSyahgHdXPNUUBv0DK1/28VY6CmGR2TlLtB
-** SIG ** 31L71H5B5DPjTkpPHXTaisrFRx9dsEFGbTaOLWVYEN3u
-** SIG ** QZufMLYiG7mXLdH1wREs6jpVBQHRG+CMM2B0TpYyvKLS
-** SIG ** o4Jjbksj1wpizXDo0ovBXuk+NNsm0afcgcqEWVbxO61X
-** SIG ** dlLKRieuw5pSfiTu3nyCSxLeg9z1ULJfrDYkgR+bGBbi+R0=
-</signature>
 </job>
