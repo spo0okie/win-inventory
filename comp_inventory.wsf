@@ -13,6 +13,7 @@
 option explicit
 DEBUGMODE = 0
 'Скрипт сбора данных о конфигурации компа
+'v2.1  ! исправлен баг с игнорированием кэша ПО
 'v2.0  * переход на использование lib_core2 (v3.0)
 '      + Кэширование пользовательского софта для последющего его учета в списке ПО в случае когда его реестр не загружен (пользователь не входил в ПК)
 '        это сключает ситуации с "морганием" пользовательского ПО в общем списке
@@ -50,7 +51,7 @@ DEBUGMODE = 0
 
 forceCscript
 
-const scrName="gp_compInventory" : const scrVer="win 2.0"
+const scrName="gp_compInventory" : const scrVer="win 2.1"
 dim logFile : logFile = WorkDir & scrName & ".log"
 
 Msg "-" : Msg "Script started: "&scrName&" "&scrVer&" (core "&coreLibVer&")"
@@ -112,7 +113,12 @@ function ListUsersSoft()
 					WriteFile cacheFile, profileSoft
 				elseif objFSO.FileExists(cacheFile) then
 					msg profile & " - CACHED"
-					profileSoft = profileSoft
+					profileSoft = getFile(cacheFile)
+					if Len(profileSoft)>0 then
+						msg "User soft loaded:"& vbCrLf & profileSoft
+					else
+						msg "User soft list empty"
+					end if
 				else
 					msg profile & " - MISSING"
 					profileSoft = ""
