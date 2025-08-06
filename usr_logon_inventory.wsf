@@ -1,7 +1,8 @@
 <job id="logon_Descr">
-<script language="VBScript" src="../libs/lib_core.vbs" ></script>
+<script language="VBScript" src="../libs/lib_core2.vbs" ></script>
+<script language="VBScript" src="../libs/lib_wmi2.vbs" ></script>
+<script language="VBScript" src="../libs/lib_time2.vbs" ></script>
 <script language="VBScript" src="../libs/lib_http.vbs" ></script>
-<script language="VBScript" src="../libs/lib_time.vbs" ></script>
 <script language="VBScript" src="../config.priv.vbs" ></script>
 <script language="javascript" runat="server" src="../libs/lib_url.js" ></script>
 <script language="VBScript">
@@ -12,7 +13,12 @@ DEBUGMODE=0
 'Работает не так тупо как раньше - просто добавить запись в БД с текущим временем или попытаться через 5 минут.
 'Скрипт определяет время логина пользователя и пытается класть в БД именно набор логин+комп+время
 'и кладет только если такого набора там еще нет
-'v0.9 * обязательная авторизация. работа с новым API со слепым PUSH данных, без чтения (необходим минимальный набор прав)
+'v1.4	! code clean
+'v1.3   ! Добавлена проверка типа переменной logonEvent передаваемой в logonEventClass
+'v1.2   * Обращение к объектам полученным из WMI со сломанным WMI также может вызывать ошибки - добавлены функции getWmiQueryArrayCrit
+'v1.1   * Убрано определение hostname/domain через WMI, т.к. в библиотеке CORE они уже загружаются через реестр
+'v1.0   ! WMI запросы вынесены в отдельную библиотеку и завернуты в проверку ошибок ВСЕ. Также добавлена оценка времени работы скрипта
+'v0.9   * обязательная авторизация. работа с новым API со слепым PUSH данных, без чтения (необходим минимальный набор прав)
 'v0.8.5 * WMI запрос завернут в игнор ошибок, чтобы не выбрасывать их пользователю
 'v0.8.4 * Добавлена отладка, удален лишний объект WMI
 'v0.8.3 * Попытка обработать ошибки доступа
@@ -30,9 +36,9 @@ DEBUGMODE=0
 'v0.3 	- вынесено в отдельный скрипт относительно скрипта логона, для запуска по шедулеру в любое время
 'v0.2 	- переведено на WSH для подключения библиотек и ведения лога
 'unPrivelegeMe
-const scrName="gp_logonInventory" : const scrVer="0.9"
+const scrName="gp_logonInventory" : const scrVer="1.4"
 Dim adsinfo, logItems, oShell, strSessionName, vbsTimestamp, strTimestamp, unixTimestamp
-
+dim logFile : logFile = WorkDir & scrName & ".log"
 
 'Logon Types
 '0 Used only by the System account.
@@ -63,13 +69,13 @@ Class logonEventClass
 		wmiType=winType
 		invType=-1
 		Select case winType
-			case 2
+			case 2	'интерактивный вход в консоль
 				invType=0
-			case 11
+			case 11	'интерактивный вход в консоль используя кэшированные учетные данные
 				invType=0
-			case 10
+			case 10 'RDP
 				invType=1
-			case 12
+			case 12	'RDP используя кэшированные учетные данные
 				invType=1
 		end select
 	End function
@@ -79,23 +85,23 @@ Class logonEventClass
 
 		typeConvert(logonEvent.LogonType)
 		if invType<0 then 
-			debugMsg "Ignoring event " & objItem.LogonId & " with type " & logonEvent.LogonType
+			debugMsg "Ignoring event " & logonEvent.LogonId & " with type " & logonEvent.LogonType
 			exit function
 		end if
 		
-		setWmiTime(objItem.startTime)
+		setWmiTime(logonEvent.startTime)
 		'сценарий когда комп загрузился со сбитыми часами (2001-01-01 00:00:00), зафиксировал в журнале событие входа в 5 минут 1 января
 		'а потом часы выставились правильно, и при отправке информации уже не видно сдвига по времени
 		'в итоге не отправляем данные о событиях более чем месяц назад
 		if (timeGetUnixEpoch-unixTime)>100*24*3600 then 
-			debugMsg "Ignoring event " & objItem.LogonId & " with tooo old date " & strTime
+			debugMsg "Ignoring event " & logonEvent.LogonId & " with tooo old date " & strTime
 			exit function
 		end if
 		
 		strUserName=""
 		strDomainName=""
 		dim colList, objUser
-		Set colList = objWmi.ExecQuery("Associators of {Win32_LogonSession.LogonId=" & logonEvent.LogonId & "} Where AssocClass=Win32_LoggedOnUser Role=Dependent" )       
+		Set colList = getWmiQueryCrit("Associators of {Win32_LogonSession.LogonId=" & logonEvent.LogonId & "} Where AssocClass=Win32_LoggedOnUser" )       
 		on error resume next
 		For Each objUser in colList
 			strUserName = objUser.Name
@@ -103,7 +109,7 @@ Class logonEventClass
 		Next
 		on error goto 0
 		if strUserName="" or strDomainName="" then 
-			debugMsg "Can't find event " & objItem.LogonId & " username "
+			debugMsg "Can't find event " & logonEvent.LogonId & " username "
 			exit function
 		end if
 
@@ -146,130 +152,42 @@ End Class
 dim logFile: logFile = WorkDir & scrName & ".log"
 Msg "-" : Msg "Script started: "&scrName&" "&scrVer
 
-
-dim wshNetwork: Set wshNetwork = CreateObject( "WScript.Network" )
-dim strComputerName, strComputerDomain
-dim objItems, objItem
-
-Set objItems = objWmi.ExecQuery("Select * from Win32_ComputerSystem",,48)
-For Each objItem in objItems
-    strComputerDomain = objItem.Domain
-	strComputerName = objItem.Name
-Next
-
-
 'почемуто вот этот вот запрос отдает мне 2 элемента. по собственно времени логона они практически идентичны
 'отличаются в микросекундах, но все же отличны. потому данные кладем в словарь с точностью до секунд
-Set objItems = objWmi.ExecQuery ("Select * from Win32_LogonSession")
+dim objItems, objItem
+objItems = getWmiQueryArrayCrit ("Select * from Win32_LogonSession")
 dim objLogons: set objLogons = CreateObject("Scripting.Dictionary")
 dim logonEvent
-dim colList, objUser
-
+dim colList, objUser, objType
 For Each objItem in objItems
-	if DEBUGMODE then
-		WScript.Echo "AuthenticationPackage: " & objItem.AuthenticationPackage 
-		WScript.Echo "Caption: " & objItem.Caption
-		WScript.Echo "Description: " & objItem.Description
-		WScript.Echo "InstallDate: " & objItem.InstallDate
-		WScript.Echo "LogonId: " & objItem.LogonId
-		WScript.Echo "Name: " & objItem.Name
-		WScript.Echo "LogonType: " & objItem.LogonType
-		WScript.Echo "StartTime: " & objItem.StartTime
-		WScript.Echo "Status: " & objItem.Status
-	end if
-
-	'Set colList = objWMIService.ExecQuery("Associators of " _
-	'	& "{Win32_LogonSession.LogonId=" & objItem.LogonId & "} " _
-	'	& "Where AssocClass=Win32_LoggedOnUser Role=Dependent" )
-        '
-	'	For Each objUser in colList
-	'		WScript.Echo "User: " & objUser.Name
-	'		WScript.Echo "Domain: " & objUser.Domain
-	'		WScript.Echo
-	'	Next
-	
-	set logonEvent = new logonEventClass
-	with logonEvent
-		if (.init(objItem)) then		
-			if not objLogons.exists(.keyString()) then
-				objLogons.Add .keyString(), logonEvent
-				.varDump
-				.setRecord strComputerName & "." & strComputerDomain
-			end if
+	objType = getVariableType(objItem)
+	If objType = "SWbemObjectEx" Then
+		if DEBUGMODE then
+			msg "AuthenticationPackage: " & objItem.AuthenticationPackage 
+			msg "Caption: " & objItem.Caption
+			msg "Description: " & objItem.Description
+			msg "InstallDate: " & objItem.InstallDate
+			msg "LogonId: " & objItem.LogonId
+			msg "Name: " & objItem.Name
+			msg "LogonType: " & objItem.LogonType
+			msg "StartTime: " & objItem.StartTime
+			msg "Status: " & objItem.Status
 		end if
-	end with
-	
+		set logonEvent = new logonEventClass
+		with logonEvent
+			if (.init(objItem)) then		
+				if not objLogons.exists(.keyString()) then
+					objLogons.Add .keyString(), logonEvent
+					.varDump
+					.setRecord ComputerName & "." & ComputerDomain
+				end if
+			end if
+		end with
+	else
+		debugMsg "Ignoring non-SWbemObjectEx event variable: " & objType
+	end if	
 Next
-Msg "Script complete."
+Done
 
-wscript.quit
 </script>
-
-<signature>
-** SIG ** MIIIXwYJKoZIhvcNAQcCoIIIUDCCCEwCAQExDzANBglg
-** SIG ** hkgBZQMEAgEFADB3BgorBgEEAYI3AgEEoGkwZzAyBgor
-** SIG ** BgEEAYI3AgEeMCQCAQEEEHAFYRrOONQRoqMAEEvTUJAC
-** SIG ** AQACAQACAQACAQACAQAwMTANBglghkgBZQMEAgEFAAQg
-** SIG ** 8Z3XdBe6cgC7a+EC0BgURFYor2DmIxTmEBi2g1dyLrSg
-** SIG ** ggWcMIIFmDCCA4CgAwIBAgIBAzANBgkqhkiG9w0BAQsF
-** SIG ** ADBtMQswCQYDVQQGEwJSVTENMAsGA1UECAwEVXJhbDEU
-** SIG ** MBIGA1UEBwwLQ2hlbHlhYmluc2sxETAPBgNVBAoMCFJl
-** SIG ** dmlha2luMQswCQYDVQQLDAJJVDEZMBcGA1UEAwwQcmV2
-** SIG ** aWFraW4tcm9vdC1DQTAeFw0yMzA1MjUxNTM3MDBaFw0y
-** SIG ** NDA2MDMxNTM3MDBaMGMxCzAJBgNVBAYTAlJVMQ0wCwYD
-** SIG ** VQQIDARVcmFsMQ0wCwYDVQQHDARDaGVsMREwDwYDVQQK
-** SIG ** DAhSZXZpYWtpbjELMAkGA1UECwwCSVQxFjAUBgNVBAMM
-** SIG ** DXJldmlha2luLWNvZGUwggEiMA0GCSqGSIb3DQEBAQUA
-** SIG ** A4IBDwAwggEKAoIBAQCtsuYd7CVRsLwbN6ybLrnCr72O
-** SIG ** nqGhfdASM37B9yC8+b5nnbw6EqDEN2IHpy32wOoThAlg
-** SIG ** zPna/D5/VX/TYuLR/1vjW+vRQPKbJi8m97BMr8PemMWl
-** SIG ** w6mjl9x4qW0x4irIwXra/Z4R34BgrY8ZACZRah0riiWY
-** SIG ** GXPvCw3ZjNYMXRJF4rVKJ6c/PNg1bNlML1Q8oHcy3MPC
-** SIG ** CVCHF/Qf3Bl/l76GKJhylViC5/ZiX34LfzCopdK1xnnY
-** SIG ** 45cP1c83pQH2IE3ucjGMwzWDYCwTNAeYi69aaK40fGHC
-** SIG ** Z9EJg6sS1RnEyCpp+Sj23T/GOJyTxM4kaiPmlMDZoCAq
-** SIG ** UndLk6HVAgMBAAGjggFLMIIBRzAJBgNVHRMEAjAAMBEG
-** SIG ** CWCGSAGG+EIBAQQEAwIFoDAzBglghkgBhvhCAQ0EJhYk
-** SIG ** T3BlblNTTCBHZW5lcmF0ZWQgQ2xpZW50IENlcnRpZmlj
-** SIG ** YXRlMB0GA1UdDgQWBBSXtltT7BkMs4W7USOsFdk+mc0S
-** SIG ** HjAfBgNVHSMEGDAWgBSNQkTnQD4Z5d3UogsBh0kUyrwl
-** SIG ** pzAOBgNVHQ8BAf8EBAMCBeAwJwYDVR0lBCAwHgYIKwYB
-** SIG ** BQUHAwIGCCsGAQUFBwMEBggrBgEFBQcDAzA4BgNVHR8E
-** SIG ** MTAvMC2gK6AphidodHRwOi8vcGtpLnJldmlha2luLm5l
-** SIG ** dC9jcmwvcm9vdC1jYS5jcmwwPwYIKwYBBQUHAQEEMzAx
-** SIG ** MC8GCCsGAQUFBzAChiNodHRwOi8vcGtpLnJldmlha2lu
-** SIG ** L25ldC9yb290LWNhLmNydDANBgkqhkiG9w0BAQsFAAOC
-** SIG ** AgEAix6Hc2aULCO6RiT4W5PIiB9zQgA4BGT3W5YdSttn
-** SIG ** gGhnmWDEfT2bhB/ZnRLkrtZeL/sYDj94FIfKZMvFTsNN
-** SIG ** CUeDNiV9hQyJrsrI9Gq3nkgcnCOGc/9mqqL7ItS33s1M
-** SIG ** ltSXVA7sLhoQ65yPrP70kd3681COUsCYOq7hroIR3Th4
-** SIG ** L8INGLvUR+Xll1sunIHrnuiTD/GZFNemDec0f3n8mNKp
-** SIG ** 5KiWuYlNYv0Zg//rTvCZfk2Y74Mk/2lCeABVKcQoJai+
-** SIG ** XiSN0mq1b6RlFmfbiuzU3iudZ3SKHKEd3reGBXZxD7b1
-** SIG ** QubveA17QKbgzwjT6DX9ISFjbIOuB9HUo3Bl7VLZ4DyH
-** SIG ** 2mt0z+UC1zpE9DLFzoawf4f5/KN6mixGX9Q7tSQQCOKo
-** SIG ** Jiyk7Y+0aLXhK7RmJdDK3vIieJkXSx0ip1SXdRYgr0sQ
-** SIG ** VsNq2D2SYJ0A1r2wWJ4sNuiHnDuxWuxLsAdC0rZTlKis
-** SIG ** 21i4uOIr3BCj2MFdTTdkeX5xB979r/8MLBdrDlzoVxMz
-** SIG ** tEWwXdNlqiCQosIMVq44bJF1zjFPD6pYk0JgEF9y8wTd
-** SIG ** G2LyGFjTqJYyCrKrWFkQa8GX6pazj4EarEpNjdVC6IXJ
-** SIG ** YRa4vRqUEWfS9WeTGlIR9hJyqtHKAc9N82lwrhTlPhh+
-** SIG ** lkL15ZPRXnnd5aICNgQpndNfyBIxggIbMIICFwIBATBy
-** SIG ** MG0xCzAJBgNVBAYTAlJVMQ0wCwYDVQQIDARVcmFsMRQw
-** SIG ** EgYDVQQHDAtDaGVseWFiaW5zazERMA8GA1UECgwIUmV2
-** SIG ** aWFraW4xCzAJBgNVBAsMAklUMRkwFwYDVQQDDBByZXZp
-** SIG ** YWtpbi1yb290LUNBAgEDMA0GCWCGSAFlAwQCAQUAoHww
-** SIG ** EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwG
-** SIG ** CisGAQQBgjcCAQQwHAYKKwYBBAGCNwIBCzEOMAwGCisG
-** SIG ** AQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIPelz9Fusm+T
-** SIG ** M0dx0uf+2uL0TDkKJ1JBgSNBQ04yOWeUMA0GCSqGSIb3
-** SIG ** DQEBAQUABIIBABacRTHhfdORnXYqiVZANmU6daiNOIxK
-** SIG ** VcWNn9brnevm/XDVFoFJpCtIyd1HXuIp+RW6XKRxmgWq
-** SIG ** E1MHdrMMR9e/xs08iLcHW4i9Sp1t7QkgpGCtzrgBOCD+
-** SIG ** AAo51v2p3F+tu1qDYU03px2UK3ASlSESAr7Qv9tDOrWn
-** SIG ** 8b/PSS14yru63OQQcZ9Dx7346y00bSIE4ggPtEXurUKc
-** SIG ** hD8uPiMCxtONtWs2/St0cjGVxUGMF2AUKKZ+mwWO6iiR
-** SIG ** 39DjNjwnEyhiSULqlhDWSHT94D1EgOM4ItoJaNlzs7kh
-** SIG ** vjE8gjlu+QHci8yDrAmGEVsQvBL3qcRE3EMU6ZPxpnKvULo=
-</signature>
 </job>
