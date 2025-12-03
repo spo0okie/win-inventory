@@ -13,6 +13,7 @@
 option explicit
 DEBUGMODE = 0
 'Скрипт сбора данных о конфигурации компа
+'v2.2  * добавлен сбор информации о серийных номерах всех компонентов
 'v2.1  ! исправлен баг с игнорированием кэша ПО
 'v2.0  * переход на использование lib_core2 (v3.0)
 '      + Кэширование пользовательского софта для последющего его учета в списке ПО в случае когда его реестр не загружен (пользователь не входил в ПК)
@@ -51,7 +52,7 @@ DEBUGMODE = 0
 
 forceCscript
 
-const scrName="gp_compInventory" : const scrVer="win 2.1"
+const scrName="gp_compInventory" : const scrVer="win 2.2"
 dim logFile : logFile = WorkDir & scrName & ".log"
 
 Msg "-" : Msg "Script started: "&scrName&" "&scrVer&" (core "&coreLibVer&")"
@@ -192,7 +193,8 @@ msg "Searching CPU..."
 For Each objItem in getWmiQueryArrayCrit( "Select * from Win32_Processor")
 	stringCommaAdd hwList, ",", "{""processor"":{" _
 		& """model"":""" & TrimWithTabs( URL.addslashes(objItem.Name)) & """, " _
-		& """cores"":""" & objItem.numberOfCores & """" _
+		& """cores"":""" & objItem.numberOfCores & """, " _
+		& """serial"":""" & TrimWithTabs( URL.addslashes(objItem.SerialNumber )) & """" _
 	& "}}"
 Next
 
@@ -200,7 +202,8 @@ msg "Searching MEM Banks..."
 For Each objItem in getWmiQueryArrayCrit("Select * from Win32_PhysicalMemory")
 	stringCommaAdd hwList, ",", "{""memorybank"":{"_
 		& """manufacturer"":""" & URL.addslashes(objItem.Manufacturer) & """, "_
-		& """capacity"":""" & round(objItem.Capacity / 1048576) & """" _
+		& """capacity"":""" & round(objItem.Capacity / 1048576) & """, " _
+		& """serial"":""" & TrimWithTabs( URL.addslashes(objItem.SerialNumber )) & """" _
 	& "}}"
 Next
 
@@ -229,7 +232,8 @@ For Each objItem in getWmiQueryArrayCrit( "Select * from Win32_VideoController")
 	if cardOk then
 		stringCommaAdd hwList, ",", "{""videocard"":{" _
 			& """name"":""" & URL.addslashes(objItem.Name) & """," _
-			& """ram"":""" & Int( ( abs(objItem.AdapterRAM )) / 1024 /1024 ) & """" _
+			& """ram"":""" & Int( ( abs(objItem.AdapterRAM )) / 1024 /1024 ) & """, " _
+			& """serial"":""" & TrimWithTabs( URL.addslashes(objItem.SerialNumber )) & """" _
 		& "}}"
 	end if
 Next
