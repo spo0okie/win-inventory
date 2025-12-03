@@ -12,7 +12,9 @@
 <script language="VBScript">
 option explicit
 DEBUGMODE = 0
+
 'Скрипт сбора данных о конфигурации компа
+'v2.3  ! исключены виртуальные сетевые адаптеры из списка сетевых карт
 'v2.2  * добавлен сбор информации о серийных номерах всех компонентов
 'v2.1  ! исправлен баг с игнорированием кэша ПО
 'v2.0  * переход на использование lib_core2 (v3.0)
@@ -50,19 +52,63 @@ DEBUGMODE = 0
 '	т.к. wmi отдает инфу только по продуктам установленным через MSI
 '	отправки данных пока нет. только сбор
 
-forceCscript
+forceCscript()
 
-const scrName="gp_compInventory" : const scrVer="win 2.2"
+const scrName="gp_compInventory" : const scrVer="win 2.3"
 dim logFile : logFile = WorkDir & scrName & ".log"
 
 Msg "-" : Msg "Script started: "&scrName&" "&scrVer&" (core "&coreLibVer&")"
-checkDir inventory_local_cache
-dim objWMIService
-Set objWMIService = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\cimv2")
-dim colItems,objItem
 
 privelegeMe()
 checkFullAdminRights()
+
+dim objWMIService
+Set objWMIService = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\cimv2")
+
+'виртуальные диски для игнорирования в списке оборудования (майкрософтовские user profile disks в RDP моргают)
+dim virtualDrives : virtualDrives = array("Microsoft Virtual Disk","Виртуальный диск (Майкрософт)")
+'виртуальные видеоадаптеры (RDP и т.п.)
+dim virtualVideo : virtualVideo = array("Microsoft Remote Display Adapter",	"Microsoft RemoteFX")
+'виртуальные сетевые адаптеры (docker, vbox, tun/tap, WSL и т.п.)
+dim virtualNetDrivers : virtualNetDrivers = array( _
+								"Microsoft Virtual WiFi Miniport Adapter", _
+								"Microsoft Wi-Fi Direct Virtual Adapter", _
+								"VirtualBox Host-Only Ethernet Adapter", _
+								"VirtualBox Bridged Networking Driver", _
+								"TAP-Windows Adapter V9", _
+								"DockerNAT" _
+							)
+dim virtualNetNames : virtualNetNames = array(	"vEthernet", _
+								"Loopback", _
+								"Virtual WiFi", _
+								"vEthernet (WSL)", _
+								"Wi-Fi Direct", _
+								"VirtualBox", _
+								"TAP-Windows", _
+								"Docker" _
+							)
+
+checkDir inventory_local_cache
+
+dim colItems,objItem
+
+'проверяет содержит ли строка name хотя бы одну из подстрок в массиве stringArray
+'для проверки оборудования на шаблоны имен (виртуальные видеоадаптеры, диски, сетевые адаптеры и т.п.)
+Function ContainsSubstring(ByVal name, ByVal stringArray)
+    Dim i, result
+    result = False
+
+    If IsArray(stringArray) Then
+        For i = LBound(stringArray) To UBound(stringArray)
+            If InStr(1, name, stringArray(i), vbTextCompare) > 0 Then
+                result = True
+                Exit For
+            End If
+        Next
+    End If
+
+    ContainsSubstring = result
+End Function
 
 'поиск установленного софта в папке UNINSTALL в реестре - перебираем подпапки и ищем в них ProductName
 function ListSoft(byVal Path)
@@ -131,39 +177,57 @@ function ListUsersSoft()
 end function
 
 
-' получить IP-адрес
-function getIPv4addrs()
-	dim Text 
-	Text = ""
-	on error resume next
-	dim IPConfigSet: Set IPConfigSet = objWMIService.ExecQuery("Select IPAddress from Win32_NetworkAdapterConfiguration where ipenabled = true")
-	dim IPConfig,i 
-	for each IPConfig in IPConfigSet
-    	if Not IsNull(IPConfig.IPAddress) then 
-        	for i=LBound(IPConfig.IPAddress) to UBound(IPConfig.IPAddress)
-           		If InStr(IPConfig.IPAddress(i),":") = 0 Then Text = Text & IPConfig.IPAddress(i)& VbCrLf
-        	next
-		end if
-	next
-	on error goto 0
-	getIPv4addrs=Text
-end function
+Function IsVirtualAdapter(adapterName, connectionID)
+    IsVirtualAdapter = False
 
-' получить MAC-адрес
-function getMACaddrs()
-	dim Text 
-	Text = ""
-	on error resume next
-	dim IPConfigSet: Set IPConfigSet = objWMIService.ExecQuery("Select MACAddress from Win32_NetworkAdapterConfiguration where ipenabled = true")
-	dim IPConfig,i
-	for each IPConfig in IPConfigSet
-		if Not IsNull(IPConfig.MACAddress) then 
-	    	Text = Text & IPConfig.MACAddress(i)& VbCrLf
-		end if
-	next
-	on error goto 0
-	getMACaddrs=Text
-end function
+    If ContainsSubstring(adapterName, virtualNetDrivers) Then
+        IsVirtualAdapter = True
+        Exit Function
+    End If
+
+    If ContainsSubstring(connectionID, virtualNetNames) Then
+        IsVirtualAdapter = True
+        Exit Function
+    End If
+End Function
+
+' получить IP-адреса и MAC-адреса всех физических сетевых адаптеров
+Sub CollectNetInfo()
+    Dim IPConfigSet, IPConfig
+    Dim AdapterSet, Adapter
+    Dim i
+
+    On Error Resume Next
+    Set IPConfigSet = objWMIService.ExecQuery( "Select IPAddress, MACAddress, Index from Win32_NetworkAdapterConfiguration where IPEnabled = True")
+
+    For Each IPConfig In IPConfigSet
+        
+        Set AdapterSet = objWMIService.ExecQuery( "Select Name, NetConnectionID from Win32_NetworkAdapter where Index = " & IPConfig.Index)
+
+        For Each Adapter In AdapterSet
+
+            If Not IsVirtualAdapter(Adapter.Name, Adapter.NetConnectionID) Then
+                
+                ' IPv4
+                If Not IsNull(IPConfig.IPAddress) Then
+                    For i = LBound(IPConfig.IPAddress) To UBound(IPConfig.IPAddress)
+                        If InStr(IPConfig.IPAddress(i), ":") = 0 Then
+                            IPv4addrs = IPv4addrs & IPConfig.IPAddress(i) & vbCrLf
+                        End If
+                    Next
+                End If
+
+                ' MAC
+                If Not IsNull(IPConfig.MACAddress) Then
+                    MACaddrs = MACaddrs & IPConfig.MACAddress & vbCrLf
+                End If
+
+            End If
+
+        Next
+    Next
+    On Error GoTo 0
+End Sub
 
 'заполняем отпечаток софта
 dim productList : productList=""
@@ -209,13 +273,10 @@ Next
 
 msg "Searching Drives..."
 For Each objItem in getWmiQueryArrayCrit("Select * from Win32_DiskDrive")
-	dim driveOk: driveOk=true
 	dim driveSize : driveSize=objItem.Size
 	if (isnull(driveSize)) then driveSize=0
-	if (objItem.Model = "Microsoft Virtual Disk") then driveOk=false
-	if (objItem.Model = "Виртуальный диск (Майкрософт)") then driveOk=false
 
-	if driveOk then
+	if not ContainsSubstring(objItem.Model,virtualDrives) then
 		stringCommaAdd hwList, ",", "{""harddisk"":{" _
 			& """model"":""" & URL.addslashes(objItem.Model) & """," _
 			& """size"":""" & Int(round(CDbl(driveSize) /1000/1000/1000)) & """," _
@@ -228,8 +289,7 @@ msg "Searching GPU..."
 For Each objItem in getWmiQueryArrayCrit( "Select * from Win32_VideoController")
 	dim cardOk: cardOk=true
 	'пропускаем не настоящую видеокарту ибо она может моргать то есть то нет, чем забивать историю изменения ОС
-	if (objItem.Name = "Microsoft Remote Display Adapter") then cardOk=false
-	if cardOk then
+	if not ContainsSubstring(objItem.name,virtualVideo) then
 		stringCommaAdd hwList, ",", "{""videocard"":{" _
 			& """name"":""" & URL.addslashes(objItem.Name) & """," _
 			& """ram"":""" & Int( ( abs(objItem.AdapterRAM )) / 1024 /1024 ) & """, " _
@@ -255,8 +315,9 @@ For Each objItem in getWmiQueryArrayCrit( "Select * from Win32_OperatingSystem")
 Next
 
 msg "Searching IPs ..."
-dim IPv4addrs : IPv4addrs=getIPv4addrs()
-dim MACaddrs : MACaddrs=getMACAddrs()
+dim IPv4addrs 
+dim MACaddrs
+CollectNetInfo
 
 dim domainID, compID
 
