@@ -311,7 +311,7 @@ msg "Searching OS Version ..."
 dim strOS
 For Each objItem in getWmiQueryArrayCrit( "Select * from Win32_OperatingSystem")
 	strOS = objItem.Version&" "&objItem.Caption
-	stringCommaAdd hwList, ",", "{""publisher"":""Microsoft"", ""name"":""" & URL.addslashes(objItem.Caption) & """}"
+	stringCommaAdd productList, ",", "{""publisher"":""Microsoft"", ""name"":""" & URL.addslashes(objItem.Caption) & """}"
 Next
 
 msg "Searching IPs ..."
