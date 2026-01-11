@@ -147,9 +147,6 @@ Class logonEventClass
 	
 End Class
 
-
-
-dim logFile: logFile = WorkDir & scrName & ".log"
 Msg "-" : Msg "Script started: "&scrName&" "&scrVer
 
 'почемуто вот этот вот запрос отдает мне 2 элемента. по собственно времени логона они практически идентичны
